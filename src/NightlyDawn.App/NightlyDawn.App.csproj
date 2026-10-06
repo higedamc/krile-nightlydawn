@@ -29,11 +29,17 @@
     </ItemGroup>
   </Target>
 
+  <!-- No reference to NightlyDawn.Nostr: the App reaches the relay layer only through Core's
+       ITimelineSourceFactory / INostrBackend contracts (B9). Composition happens in leaf 1f.
+       tests/NightlyDawn.App.Tests/ArchitectureTests.cs fails the build's test run if this changes. -->
   <ItemGroup>
     <ProjectReference Include="..\NightlyDawn.Core\NightlyDawn.Core.csproj" />
-    <ProjectReference Include="..\NightlyDawn.Nostr\NightlyDawn.Nostr.csproj" />
     <ProjectReference Include="..\NightlyDawn.Filters\NightlyDawn.Filters.csproj" />
     <ProjectReference Include="..\NightlyDawn.Storage\NightlyDawn.Storage.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="NightlyDawn.App.Tests" />
   </ItemGroup>
 
 </Project>
