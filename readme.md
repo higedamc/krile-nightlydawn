@@ -67,7 +67,25 @@ comma-separated `wss://` list; plaintext `ws://` is refused before any socket op
 NIGHTLYDAWN_RELAYS="wss://relay.damus.io,wss://nos.lol,wss://relay.nostr.band" dotnet run --project src/NightlyDawn.Host
 ```
 
-Reading needs no key. Key generation / signing (leaf 1b) is wired separately.
+Reading needs no key. The **Keys** panel (collapsed, under the timeline) is
+optional and independent of the timeline:
+
+- *No key*: enter a passphrase twice and press **Generate key**. The key is
+  created in-process and stored only as NIP-49 `ncryptsec1…` ciphertext at
+  `~/Library/Application Support/NightlyDawn/local-key.ncryptsec` (macOS) or
+  `$XDG_DATA_HOME/NightlyDawn/local-key.ncryptsec` (Linux, fallback
+  `~/.local/share`), directory 0700, file 0600. `NIGHTLYDAWN_DATA_DIR` overrides
+  the location. **The passphrase is the only thing protecting the key; there is
+  no recovery without it.**
+- *Key stored, locked* (every new launch): enter the passphrase and press
+  **Unlock**. Unlocking does not rewrite the stored file.
+- *Unlocked*: the public key (hex) is shown. **Export (ncryptsec)** re-encrypts
+  the key under a passphrase you type and shows the result read-only; nothing
+  reaches the clipboard until you press **Copy** (the clipboard is readable by
+  other apps on this account and may sync to other devices). **Sign out** removes
+  the stored key from this device — export first if you want to keep it.
+
+Nothing signs or publishes yet; the key is for identity set-up ahead of posting.
 
 ### macOS
 

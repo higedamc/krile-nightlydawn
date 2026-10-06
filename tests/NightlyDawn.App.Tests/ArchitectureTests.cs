@@ -4,14 +4,14 @@ using Xunit;
 namespace NightlyDawn.App.Tests;
 
 /// <summary>
-/// B9: the App layer reaches the relay layer only through Core contracts. Two checks, because they fail for
+/// B9: the App layer reaches the relay layer and the key store only through Core contracts (NightlyDawn.Nostr and NightlyDawn.Keys are both forbidden). Two checks, because they fail for
 /// different mistakes: the assembly-metadata check catches App code that uses a NightlyDawn.Nostr type; the
 /// dependency-graph check catches a ProjectReference that was added but not (yet) used, which the C# compiler
 /// would otherwise drop from the metadata and hide.
 /// </summary>
 public class ArchitectureTests
 {
-    private const string Forbidden = "NightlyDawn.Nostr";
+    private static readonly string[] Forbidden = ["NightlyDawn.Nostr", "NightlyDawn.Keys"];
 
     [Fact]
     public void App_DoesNotUseTheNostrAssembly()
@@ -19,7 +19,10 @@ public class ArchitectureTests
         var referenced = typeof(App).Assembly.GetReferencedAssemblies().Select(a => a.Name).ToList();
 
         Assert.Contains("NightlyDawn.Core", referenced);
-        Assert.DoesNotContain(Forbidden, referenced);
+        foreach (var forbidden in Forbidden)
+        {
+            Assert.DoesNotContain(forbidden, referenced);
+        }
     }
 
     [Fact]
@@ -42,7 +45,10 @@ public class ArchitectureTests
                 : [];
 
             Assert.Contains("NightlyDawn.Core", dependencies);
-            Assert.DoesNotContain(Forbidden, dependencies);
+            foreach (var forbidden in Forbidden)
+            {
+                Assert.DoesNotContain(forbidden, dependencies);
+            }
         }
     }
 }

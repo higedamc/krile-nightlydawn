@@ -127,6 +127,20 @@ public sealed class LocalKeyStore(IKeyFileStore fileStore) : IKeyStore
         return fileStore.DeleteAsync(cancellationToken);
     }
 
+    public async Task<bool> HasStoredKeyAsync(CancellationToken cancellationToken = default) =>
+        await fileStore.ReadAsync(cancellationToken).ConfigureAwait(false) is not null;
+
+    /// <summary>Decrypts the persisted <c>ncryptsec1</c> for this session. Deliberately does not call <see cref="IKeyFileStore.WriteAsync"/>: the stored bytes are already what we want on disk, and rewriting on every unlock would turn a read-only action into a write to the only copy.</summary>
+    public async Task<SignerDescriptor> UnlockStoredKeyAsync(ReadOnlyMemory<char> passphrase, CancellationToken cancellationToken = default)
+    {
+        var stored = await fileStore.ReadAsync(cancellationToken).ConfigureAwait(false)
+            ?? throw new SignerUnavailableException("No local key is stored. Generate or import one first.");
+
+        var payload = Bech32.Decode("ncryptsec", stored);
+        var rawKey = Nip49KeyEncryption.Decrypt(payload, passphrase);
+        return SetActiveKey(rawKey, Nip49KeyEncryption.ReadKeySecurity(payload));
+    }
+
     private SignerDescriptor RequireActiveSigner()
     {
         if (_privateKey is null || _pubkeyHex is null)

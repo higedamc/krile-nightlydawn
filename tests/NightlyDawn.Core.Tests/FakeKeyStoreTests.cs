@@ -21,6 +21,16 @@ public class FakeKeyStoreTests
         Assert.StartsWith("ncryptsec1", exported, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task HasStoredKey_IsFalseBeforeGenerate_TrueAfter_AndNeverNeedsAPassphrase()
+    {
+        var store = new FakeLocalKeyStore();
+
+        Assert.False(await store.HasStoredKeyAsync());
+        await store.GenerateLocalKeyAsync("pw".AsMemory());
+        Assert.True(await store.HasStoredKeyAsync());
+    }
+
     private sealed class FakeLocalKeyStore : IKeyStore
     {
         private string? _ncryptsec;
@@ -62,6 +72,12 @@ public class FakeKeyStoreTests
 
         public Task<string> ExportLocalKeyAsync(ReadOnlyMemory<char> passphrase, CancellationToken cancellationToken = default) =>
             Task.FromResult(_ncryptsec ?? throw new SignerUnavailableException("no local key"));
+
+        public Task<bool> HasStoredKeyAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(_ncryptsec is not null);
+
+        public Task<SignerDescriptor> UnlockStoredKeyAsync(ReadOnlyMemory<char> passphrase, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new SignerDescriptor(_pubkey ?? throw new SignerUnavailableException("nothing stored"), SignerKind.Nip49Local));
 
         public Task SignOutAsync(CancellationToken cancellationToken = default)
         {

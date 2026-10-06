@@ -61,6 +61,14 @@ public interface IKeyStore
 
     /// <summary>Clears this store's own key state. Callers are responsible for clearing any other <c>nostr.*</c> app state.</summary>
     Task SignOutAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Answers whether there is something to unlock — an encrypted key this store has persisted — without asking for a passphrase. Says nothing about whether that stored material is valid or decryptable; returns false (never throws) when nothing is stored. Lets a UI tell "generate or import" from "enter your passphrase" (Lead-approved addition, 2026-10-07). Revisit as an enum if NIP-46 adds a third stored state.</summary>
+    Task<bool> HasStoredKeyAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Activates the key this store already persists, using <paramref name="passphrase"/> only to decrypt it for this session (S2 scrubbable buffer; never persisted). Unlike <see cref="ImportLocalKeyAsync"/> it does not rewrite the stored file.</summary>
+    /// <exception cref="SignerUnavailableException">Nothing is stored (<see cref="HasStoredKeyAsync"/> would return false).</exception>
+    /// <exception cref="System.Security.Cryptography.CryptographicException">The passphrase does not decrypt the stored key.</exception>
+    Task<SignerDescriptor> UnlockStoredKeyAsync(ReadOnlyMemory<char> passphrase, CancellationToken cancellationToken = default);
 }
 
 /// <summary>A live feed behind a <see cref="Timeline"/> column. Implemented in phase 1 by composing <see cref="INostrBackend"/> and <see cref="IFilterCompiler"/>.</summary>
