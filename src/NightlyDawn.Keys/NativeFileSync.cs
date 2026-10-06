@@ -65,9 +65,12 @@ internal static class NativeFileSync
     private static extern int fcntl(int fd, int cmd, int arg);
 
     // 2-arg form: valid because this never passes O_CREAT, whose mode argument is the
-    // only reason open(2) is variadic in the first place.
+    // only reason open(2) is variadic in the first place. LPUTF8Str is explicit here
+    // rather than relying on .NET's default Unix string marshaling (which already is
+    // UTF-8, but implicitly) — the same way EIntr and ORdOnly above are spelled out
+    // instead of assumed, so a reader never has to go check what the default would do.
     [DllImport("libc", SetLastError = true)]
-    private static extern int open(string pathname, int flags);
+    private static extern int open([MarshalAs(UnmanagedType.LPUTF8Str)] string pathname, int flags);
 
     [DllImport("libc", SetLastError = true)]
     private static extern int close(int fd);
@@ -132,10 +135,18 @@ internal static class NativeFileSync
     /// <exception cref="IOException">The directory could not be opened, or its fsync failed.</exception>
     public static void SyncDirectoryToDisk(string directoryPath)
     {
-        var fd = open(directoryPath, ORdOnly);
+        int fd;
+        int openError;
+        do
+        {
+            fd = open(directoryPath, ORdOnly);
+            openError = Marshal.GetLastWin32Error();
+        }
+        while (fd < 0 && openError == EIntr); // same retry discipline as fsync/fcntl below — open(2) can be interrupted too.
+
         if (fd < 0)
         {
-            throw new IOException($"Could not open directory '{directoryPath}' for fsync (errno {Marshal.GetLastWin32Error()}).");
+            throw new IOException($"Could not open directory '{directoryPath}' for fsync (errno {openError}).");
         }
 
         try

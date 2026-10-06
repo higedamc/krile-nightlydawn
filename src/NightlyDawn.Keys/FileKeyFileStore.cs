@@ -66,6 +66,7 @@ public sealed class FileKeyFileStore(string filePath) : IKeyFileStore
         }
     }
 
+    /// <summary>Writes <paramref name="ncryptsec"/> durably. If the directory fsync after the rename throws, the key is already on disk and active in memory, but the caller sees failure rather than a silently-swallowed error — self-recovering, since the file is readable and the next unlock with the same passphrase succeeds.</summary>
     public async Task WriteAsync(string ncryptsec, CancellationToken cancellationToken = default)
     {
         var directory = Path.GetDirectoryName(filePath);
