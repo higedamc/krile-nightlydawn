@@ -67,7 +67,7 @@ public class ContractTests
     {
         var relay = RelayUrl.Parse("ws://localhost:4869", allowInsecureForDevelopment: true);
 
-        Assert.Equal("ws://localhost:4869", relay.ToString());
+        Assert.Equal("ws://localhost:4869/", relay.ToString());
     }
 
     [Fact]
@@ -75,6 +75,22 @@ public class ContractTests
     {
         // A bare StartsWith("wss://") check would have let this through (B12).
         Assert.Throws<ArgumentException>(() => RelayUrl.Parse("wss://relay.example\r\nSec-Fetch: fake"));
+    }
+
+    [Fact]
+    public void RelayUrl_NormalizesSurroundingWhitespaceAndCase_SoEquivalentRelaysCompareEqual()
+    {
+        // B14: Value must be uri.AbsoluteUri, not the caller's raw string — otherwise
+        // incidental whitespace reaches the WebSocket client, and two inputs denoting
+        // the same relay (trailing slash, scheme case) would compare unequal, which
+        // breaks B6's "EOSE from every connected relay" and B7's SeenOnRelays.
+        var padded = RelayUrl.Parse("  wss://a.example\t");
+        var upperScheme = RelayUrl.Parse("WSS://A.Example/");
+        var canonical = RelayUrl.Parse("wss://a.example/");
+
+        Assert.Equal("wss://a.example/", padded.ToString());
+        Assert.Equal(canonical, upperScheme);
+        Assert.Equal(canonical, padded);
     }
 
     [Fact]
