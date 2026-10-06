@@ -22,12 +22,14 @@ public sealed class RelayConnectionException(string relayUrl, string message) : 
     public string RelayUrl { get; } = relayUrl;
 }
 
-/// <summary>A relay rejected a published event (NIP-20 <c>OK false &lt;reason&gt;</c>).</summary>
-public sealed class EventPublishException(string relayUrl, string reason)
-    : NightlyDawnException($"Relay {relayUrl} rejected the event: {reason}")
+/// <summary>No relay accepted a published event (B5: zero-of-N accepted, not an individual relay's rejection — see <see cref="Result"/> for the per-relay detail).</summary>
+public sealed class EventPublishException(PublishResult result)
+    : NightlyDawnException("No relay accepted the event.")
 {
-    public string RelayUrl { get; } = relayUrl;
-    public string Reason { get; } = reason;
+    public PublishResult Result { get; } = result;
 }
 
 public sealed class FilterParseException(string message) : NightlyDawnException(message);
+
+/// <summary>A wire-level event could not be mapped onto a domain type (malformed kind:0/10002/1 content). Callers should skip and log, not crash the subscription (B10).</summary>
+public sealed class EventMappingException(string message) : NightlyDawnException(message);

@@ -32,21 +32,48 @@ public class ContractTests
     }
 
     [Fact]
-    public void EventPublishException_FormatsRelayAndReasonIntoMessage()
+    public void PublishResult_AnyAccepted_IsTrue_WhenAtLeastOneRelayAccepted()
     {
-        var exception = new EventPublishException("wss://relay.example", "rate-limited");
+        var result = new PublishResult([
+            new RelayPublishOutcome(RelayUrl.Parse("wss://a.example"), Accepted: false, Reason: "rate-limited"),
+            new RelayPublishOutcome(RelayUrl.Parse("wss://b.example"), Accepted: true),
+        ]);
 
-        Assert.Equal("wss://relay.example", exception.RelayUrl);
-        Assert.Equal("rate-limited", exception.Reason);
-        Assert.Contains("wss://relay.example", exception.Message);
-        Assert.Contains("rate-limited", exception.Message);
+        Assert.True(result.AnyAccepted);
+    }
+
+    [Fact]
+    public void PublishResult_AnyAccepted_IsFalse_WhenZeroRelaysAccepted()
+    {
+        var result = new PublishResult([
+            new RelayPublishOutcome(RelayUrl.Parse("wss://a.example"), Accepted: false, Reason: "rate-limited"),
+        ]);
+
+        Assert.False(result.AnyAccepted);
+
+        var exception = new EventPublishException(result);
+        Assert.Same(result, exception.Result);
+    }
+
+    [Fact]
+    public void RelayUrl_RejectsPlaintextWebsocket_ByDefault()
+    {
+        Assert.Throws<ArgumentException>(() => RelayUrl.Parse("ws://relay.example"));
+    }
+
+    [Fact]
+    public void RelayUrl_AllowsPlaintextWebsocket_WhenDevelopmentOptInIsSet()
+    {
+        var relay = RelayUrl.Parse("ws://localhost:4869", allowInsecureForDevelopment: true);
+
+        Assert.Equal("ws://localhost:4869", relay.ToString());
     }
 
     [Fact]
     public void Tab_HoldsOrderedTimelineColumns()
     {
-        var home = new Timeline("home", "Home", new FilterAst(new FilterSource(FilterSourceKind.Home)));
-        var mentions = new Timeline("mentions", "Mentions", new FilterAst(new FilterSource(FilterSourceKind.Mentions)));
+        var home = new Timeline("home", "Home", "from home");
+        var mentions = new Timeline("mentions", "Mentions", "from mentions");
 
         var tab = new Tab("main", "Main", [home, mentions]);
 
