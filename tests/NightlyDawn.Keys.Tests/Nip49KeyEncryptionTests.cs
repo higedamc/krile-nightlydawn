@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using NightlyDawn.Core;
 using NightlyDawn.Keys;
 using Xunit;
 
@@ -22,7 +23,7 @@ public class Nip49KeyEncryptionTests
         // A self-made encrypt-then-decrypt round trip would pass even if this
         // implementation disagreed with every other Nostr client on the wire format —
         // only the spec's own vector proves interoperability (Lead's instruction).
-        var payload = Bech32.Decode("ncryptsec", OfficialNcryptsec);
+        Assert.True(Bech32.TryDecode("ncryptsec", OfficialNcryptsec, out var payload));
 
         var decrypted = Nip49KeyEncryption.Decrypt(payload, OfficialPassword.AsMemory());
 
@@ -32,7 +33,7 @@ public class Nip49KeyEncryptionTests
     [Fact]
     public void OfficialNip49Vector_EmbedsLogN16()
     {
-        var payload = Bech32.Decode("ncryptsec", OfficialNcryptsec);
+        Assert.True(Bech32.TryDecode("ncryptsec", OfficialNcryptsec, out var payload));
 
         Assert.Equal(91, payload.Length);
         Assert.Equal(0x02, payload[0]);

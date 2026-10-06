@@ -66,7 +66,11 @@ public sealed class LocalKeyStore(IKeyFileStore fileStore) : IKeyStore
 
     public async Task<SignerDescriptor> ImportLocalKeyAsync(string nip49EncryptedKey, ReadOnlyMemory<char> passphrase, CancellationToken cancellationToken = default)
     {
-        var payload = Bech32.Decode("ncryptsec", nip49EncryptedKey);
+        if (!Bech32.TryDecode("ncryptsec", nip49EncryptedKey, out var payload))
+        {
+            throw new FormatException("Not a valid ncryptsec1... string.");
+        }
+
         var rawKey = Nip49KeyEncryption.Decrypt(payload, passphrase);
         try
         {
@@ -148,7 +152,11 @@ public sealed class LocalKeyStore(IKeyFileStore fileStore) : IKeyStore
         var stored = await fileStore.ReadAsync(cancellationToken).ConfigureAwait(false)
             ?? throw new SignerUnavailableException("No local key is stored. Generate or import one first.");
 
-        var payload = Bech32.Decode("ncryptsec", stored);
+        if (!Bech32.TryDecode("ncryptsec", stored, out var payload))
+        {
+            throw new FormatException("Not a valid ncryptsec1... string.");
+        }
+
         var rawKey = Nip49KeyEncryption.Decrypt(payload, passphrase);
         try
         {
