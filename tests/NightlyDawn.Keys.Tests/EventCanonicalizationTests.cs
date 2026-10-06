@@ -1,4 +1,4 @@
-using NightlyDawn.Keys;
+using NightlyDawn.Core;
 using Xunit;
 
 namespace NightlyDawn.Keys.Tests;
@@ -29,7 +29,7 @@ public class EventCanonicalizationTests
     [Fact]
     public void Serialize_MatchesIndependentPythonReference()
     {
-        var canonical = EventCanonicalization.Serialize(Pubkey, CreatedAt, Kind, Tags, Content);
+        var canonical = NostrEventCanonicalization.Serialize(Pubkey, CreatedAt, Kind, Tags, Content);
 
         Assert.Equal(ExpectedCanonical, canonical);
     }
@@ -37,7 +37,7 @@ public class EventCanonicalizationTests
     [Fact]
     public void ComputeId_MatchesIndependentPythonReference()
     {
-        var id = EventCanonicalization.ComputeId(Pubkey, CreatedAt, Kind, Tags, Content);
+        var id = NostrEventCanonicalization.ComputeId(Pubkey, CreatedAt, Kind, Tags, Content);
 
         Assert.Equal(ExpectedSha256Hex, Convert.ToHexString(id).ToLowerInvariant());
     }
@@ -48,7 +48,7 @@ public class EventCanonicalizationTests
         var contentWithLoneSurrogate = "before" + char.ConvertFromUtf32(0x1F600)[0] + "after";
 
         Assert.Throws<ArgumentException>(() =>
-            EventCanonicalization.ComputeId(Pubkey, CreatedAt, Kind, Tags, contentWithLoneSurrogate));
+            NostrEventCanonicalization.ComputeId(Pubkey, CreatedAt, Kind, Tags, contentWithLoneSurrogate));
     }
 
     [Fact]
@@ -56,7 +56,7 @@ public class EventCanonicalizationTests
     {
         var withControlChar = "a" + (char)0x01 + "b";
 
-        var canonical = EventCanonicalization.Serialize(Pubkey, CreatedAt, Kind, Tags, withControlChar);
+        var canonical = NostrEventCanonicalization.Serialize(Pubkey, CreatedAt, Kind, Tags, withControlChar);
 
         Assert.Contains("a\\u0001b", canonical);
     }
@@ -64,7 +64,7 @@ public class EventCanonicalizationTests
     [Fact]
     public void Serialize_DoesNotEscapeNonAsciiAsUnicodeEscapes()
     {
-        var canonical = EventCanonicalization.Serialize(Pubkey, CreatedAt, Kind, Tags, Content);
+        var canonical = NostrEventCanonicalization.Serialize(Pubkey, CreatedAt, Kind, Tags, Content);
 
         Assert.Contains("café", canonical);
         Assert.DoesNotContain("\\u00e9", canonical, StringComparison.OrdinalIgnoreCase);

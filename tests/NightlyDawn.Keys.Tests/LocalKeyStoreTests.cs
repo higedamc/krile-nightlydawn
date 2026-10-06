@@ -93,7 +93,7 @@ public class LocalKeyStoreTests : IDisposable
         Assert.Equal(64, signed.Id.Length);
         Assert.Equal(128, signed.Sig.Length);
 
-        var expectedId = EventCanonicalization.ComputeId(signed.Pubkey, signed.CreatedAt, signed.Kind, signed.Tags, signed.Content);
+        var expectedId = NostrEventCanonicalization.ComputeId(signed.Pubkey, signed.CreatedAt, signed.Kind, signed.Tags, signed.Content);
         Assert.Equal(Convert.ToHexString(expectedId).ToLowerInvariant(), signed.Id);
     }
 

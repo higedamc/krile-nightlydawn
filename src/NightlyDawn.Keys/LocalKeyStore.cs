@@ -35,7 +35,7 @@ public sealed class LocalKeyStore(IKeyFileStore fileStore) : IKeyStore
         RequireActiveSigner();
 
         var pubkey = _pubkeyHex!;
-        var id = EventCanonicalization.ComputeId(pubkey, unsignedEvent.CreatedAt, unsignedEvent.Kind, unsignedEvent.Tags, unsignedEvent.Content);
+        var id = NostrEventCanonicalization.ComputeId(pubkey, unsignedEvent.CreatedAt, unsignedEvent.Kind, unsignedEvent.Tags, unsignedEvent.Content);
 
         using var privKey = ECPrivKey.Create(_privateKey);
         var signature = privKey.SignBIP340(id);

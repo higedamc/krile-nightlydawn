@@ -1,6 +1,5 @@
 using NBitcoin.Secp256k1;
 using NightlyDawn.Core;
-using Sha256 = System.Security.Cryptography.SHA256;
 
 namespace NightlyDawn.Nostr.Wire;
 
@@ -26,20 +25,18 @@ internal static class EventVerifier
             return VerificationResult.MalformedFields;
         }
 
-        byte[] canonical;
+        byte[] digest;
         try
         {
-            canonical = NostrJson.CanonicalEventBytes(e.Pubkey, e.CreatedAt, e.Kind, e.Tags, e.Content);
+            digest = NostrEventCanonicalization.ComputeId(e.Pubkey, e.CreatedAt, e.Kind, e.Tags, e.Content);
         }
         catch (ArgumentException)
         {
             return VerificationResult.MalformedFields; // lone surrogate: no canonical form exists
         }
 
-        Span<byte> digest = stackalloc byte[32];
-        Sha256.HashData(canonical, digest);
         var idBytes = Convert.FromHexString(e.Id);
-        if (!digest.SequenceEqual(idBytes))
+        if (!digest.AsSpan().SequenceEqual(idBytes))
         {
             return VerificationResult.IdMismatch;
         }
@@ -54,11 +51,8 @@ internal static class EventVerifier
         return VerificationResult.Valid;
     }
 
-    public static string ComputeId(string pubkey, long createdAt, int kind, IReadOnlyList<IReadOnlyList<string>> tags, string content)
-    {
-        var canonical = NostrJson.CanonicalEventBytes(pubkey, createdAt, kind, tags, content);
-        return Convert.ToHexString(Sha256.HashData(canonical)).ToLowerInvariant();
-    }
+    public static string ComputeId(string pubkey, long createdAt, int kind, IReadOnlyList<IReadOnlyList<string>> tags, string content) =>
+        Convert.ToHexString(NostrEventCanonicalization.ComputeId(pubkey, createdAt, kind, tags, content)).ToLowerInvariant();
 
     internal static bool IsLowerHex(string value, int length)
     {
