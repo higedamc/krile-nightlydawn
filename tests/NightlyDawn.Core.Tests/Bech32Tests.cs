@@ -1,7 +1,7 @@
-using NightlyDawn.Keys;
+using NightlyDawn.Core;
 using Xunit;
 
-namespace NightlyDawn.Keys.Tests;
+namespace NightlyDawn.Core.Tests;
 
 /// <summary>BIP-173's own official test vectors (https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki#test-vectors), plus two tests isolating the padding guards Lead called out, and one proving the deliberate 90-character-cap divergence stays visible.</summary>
 public class Bech32Tests
@@ -150,5 +150,28 @@ public class Bech32Tests
 
         Assert.True(encoded.Length > 90);
         Assert.Equal(payload, Bech32.Decode("ncryptsec", encoded));
+    }
+
+    [Fact]
+    public void TryDecode_ReturnsTrueAndThePayload_ForAValidString()
+    {
+        byte[] payload = [0xde, 0xad, 0xbe, 0xef];
+        var encoded = Bech32.Encode("test", payload);
+
+        var ok = Bech32.TryDecode("test", encoded, out var decoded);
+
+        Assert.True(ok);
+        Assert.Equal(payload, decoded);
+    }
+
+    [Fact]
+    public void TryDecode_ReturnsFalse_ForAnInvalidString()
+    {
+        // Public callers (UI, query compiler) get this surface, not the throwing Decode —
+        // this is the one they'll actually use for a user-typed npub1... or ncryptsec1....
+        var ok = Bech32.TryDecode("x", "x1b4n0q5v", out var payload);
+
+        Assert.False(ok);
+        Assert.Empty(payload);
     }
 }
