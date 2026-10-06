@@ -1,0 +1,34 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="NightlyDawn.App.MainWindow"
+        Title="Krile NightlyDawn"
+        Width="960" Height="640"
+        MinWidth="480" MinHeight="320">
+  <DockPanel Margin="24">
+    <StackPanel DockPanel.Dock="Top" Spacing="4">
+      <TextBlock Text="Krile NightlyDawn" FontSize="28" FontWeight="SemiBold" />
+      <TextBlock Text="Nostr client shell — phase 1e placeholder. Nothing is connected yet."
+                 Opacity="0.7" />
+    </StackPanel>
+
+    <Border DockPanel.Dock="Top" Margin="0,24,0,0" Padding="16"
+            BorderThickness="1" BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+            CornerRadius="6">
+      <StackPanel Spacing="8">
+        <TextBlock Text="Platform check (for the Omarchy / XWayland spike)" FontWeight="SemiBold" />
+        <TextBlock x:Name="PlatformInfo" FontFamily="monospace" TextWrapping="Wrap" />
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <TextBox x:Name="ClipboardProbe" Width="320" PlaceholderText="Type here (IME check), then copy / paste" />
+          <Button Content="Copy" Click="OnCopyClick" />
+          <Button Content="Paste" Click="OnPasteClick" />
+        </StackPanel>
+        <TextBlock x:Name="ClipboardStatus" Opacity="0.7" />
+      </StackPanel>
+    </Border>
+
+    <TextBlock DockPanel.Dock="Bottom" Opacity="0.5" FontSize="12"
+               Text="Based on Krile StarryEyes by Karno (MIT). New code (C) 2026 Krile NightlyDawn contributors." />
+
+    <Grid />
+  </DockPanel>
+</Window>
