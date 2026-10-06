@@ -35,6 +35,10 @@ internal static class Nip49KeyEncryption
     private const int KeySize = 32;
     private const int KeySecurityByteOffset = 2 + SaltSize + NonceSize;
 
+    /// <summary>Spec's own table tops out at log_n=22 (16 GiB, r=8). Below 1, N=1 degenerates scrypt to a single unsalted-in-effect hash iteration.</summary>
+    private const byte MinLogN = 1;
+    private const byte MaxLogN = 22;
+
     /// <summary>1 (version) + 1 (log_n) + 16 (salt) + 24 (nonce) + 1 (key security) + 48 (32-byte key + 16-byte Poly1305 tag) = 91, per the spec.</summary>
     public const int PayloadSize = 91;
 
@@ -43,6 +47,12 @@ internal static class Nip49KeyEncryption
         if (privateKey.Length != KeySize)
         {
             throw new ArgumentException($"Private key must be {KeySize} bytes.", nameof(privateKey));
+        }
+
+        // Defensive, not a security boundary (logN is internal-caller-supplied here, unlike Decrypt's) — catches a bad constant before it ever reaches disk.
+        if (logN is < MinLogN or > MaxLogN)
+        {
+            throw new ArgumentOutOfRangeException(nameof(logN), logN, $"log_n must be in {MinLogN}..{MaxLogN}.");
         }
 
         Span<byte> salt = stackalloc byte[SaltSize];
@@ -101,7 +111,7 @@ internal static class Nip49KeyEncryption
         return (KeySecurity)value;
     }
 
-    /// <exception cref="FormatException">The payload's version byte is unsupported.</exception>
+    /// <exception cref="FormatException">The payload's version byte is unsupported, or log_n is outside 1..22 (an ncryptsec string is pasted-in, untrusted input: an attacker-chosen log_n above the spec's own table either exhausts memory computing N = 2^log_n, or — at 31/32 — hits C#'s 5-bit shift-count masking and produces a negative or wrapped-around N).</exception>
     /// <exception cref="CryptographicException">The passphrase is wrong or the ciphertext was tampered with.</exception>
     public static byte[] Decrypt(ReadOnlySpan<byte> payload, ReadOnlyMemory<char> passphrase)
     {
@@ -116,6 +126,11 @@ internal static class Nip49KeyEncryption
         }
 
         var logN = payload[1];
+        if (logN is < MinLogN or > MaxLogN)
+        {
+            throw new FormatException($"ncryptsec log_n {logN} is outside the supported range {MinLogN}..{MaxLogN}.");
+        }
+
         var salt = payload.Slice(2, SaltSize);
         var nonce = payload.Slice(2 + SaltSize, NonceSize);
         var keySecurityByte = payload[KeySecurityByteOffset];

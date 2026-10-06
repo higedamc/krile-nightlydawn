@@ -101,4 +101,36 @@ public class Nip49KeyEncryptionTests
 
         Assert.NotEqual(first, second);
     }
+
+    // B2: log_n comes from a pasted-in ncryptsec string — untrusted input. Unvalidated,
+    // 1 << logN either exhausts memory (e.g. logN=23 asks scrypt for 8 GiB+ at r=8) or,
+    // at 31/32, hits C#'s int-shift 5-bit masking and produces a negative/wrapped N.
+    [Theory]
+    [InlineData(0)]
+    [InlineData(23)]
+    [InlineData(31)]
+    [InlineData(32)]
+    [InlineData(255)]
+    public void Decrypt_RejectsOutOfRangeLogN_BeforeTouchingScrypt(byte maliciousLogN)
+    {
+        var privateKey = new byte[32];
+        RandomNumberGenerator.Fill(privateKey);
+        var payload = Nip49KeyEncryption.Encrypt(privateKey, "pw".AsMemory(), logN: 4, KeySecurity.Unknown);
+        payload[1] = maliciousLogN;
+
+        Assert.Throws<FormatException>(() => Nip49KeyEncryption.Decrypt(payload, "pw".AsMemory()));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(23)]
+    [InlineData(255)]
+    public void Encrypt_RejectsOutOfRangeLogN(byte maliciousLogN)
+    {
+        var privateKey = new byte[32];
+        RandomNumberGenerator.Fill(privateKey);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            Nip49KeyEncryption.Encrypt(privateKey, "pw".AsMemory(), maliciousLogN, KeySecurity.Unknown));
+    }
 }

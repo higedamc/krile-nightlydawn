@@ -105,6 +105,7 @@ public sealed class LocalKeyStore(IKeyFileStore fileStore) : IKeyStore
         }
     }
 
+    /// <summary>Always re-encrypts at <see cref="DefaultLogN"/>, not the log_n the active key happened to be generated or imported under — exporting re-applies this store's current cost policy rather than preserving whatever a possibly-older or foreign ncryptsec used. Deliberate (a backup should get this build's parameters), but worth knowing: the log_n of the string you get back is not necessarily the log_n of the one you imported.</summary>
     public Task<string> ExportLocalKeyAsync(ReadOnlyMemory<char> passphrase, CancellationToken cancellationToken = default)
     {
         RequireActiveSigner();
