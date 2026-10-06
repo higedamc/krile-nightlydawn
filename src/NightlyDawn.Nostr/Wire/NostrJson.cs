@@ -16,92 +16,13 @@ internal static class NostrJson
     };
 
     /// <summary>
-    /// The exact bytes whose SHA-256 is the event id:
-    /// <c>[0,&lt;pubkey&gt;,&lt;created_at&gt;,&lt;kind&gt;,&lt;tags&gt;,&lt;content&gt;]</c> with NIP-01 escaping
-    /// (only <c>\n \" \\ \r \t \b \f</c> escaped; other control characters as <c>\uXXXX</c>; everything else,
-    /// including non-ASCII, verbatim; no whitespace).
+    /// The exact bytes whose SHA-256 is the event id. Delegates to
+    /// <see cref="NostrEventCanonicalization"/> in Core — the serialization is the NIP-01
+    /// protocol contract itself, shared with NightlyDawn.Keys's event signing so the two
+    /// can never silently diverge (see that type's doc comment for why this matters).
     /// </summary>
-    public static byte[] CanonicalEventBytes(string pubkey, long createdAt, int kind, IReadOnlyList<IReadOnlyList<string>> tags, string content)
-    {
-        var sb = new StringBuilder(content.Length + 128);
-        sb.Append("[0,\"").Append(pubkey).Append("\",").Append(createdAt).Append(',').Append(kind).Append(",[");
-        for (var i = 0; i < tags.Count; i++)
-        {
-            if (i > 0)
-            {
-                sb.Append(',');
-            }
-
-            sb.Append('[');
-            var tag = tags[i];
-            for (var j = 0; j < tag.Count; j++)
-            {
-                if (j > 0)
-                {
-                    sb.Append(',');
-                }
-
-                AppendCanonicalString(sb, tag[j]);
-            }
-
-            sb.Append(']');
-        }
-
-        sb.Append("],");
-        AppendCanonicalString(sb, content);
-        sb.Append(']');
-        return Encoding.UTF8.GetBytes(sb.ToString());
-    }
-
-    /// <exception cref="ArgumentException">The string contains a lone UTF-16 surrogate; it has no UTF-8 form, so no canonical bytes exist for it.</exception>
-    private static void AppendCanonicalString(StringBuilder sb, string value)
-    {
-        sb.Append('"');
-        for (var i = 0; i < value.Length; i++)
-        {
-            var c = value[i];
-            if (char.IsHighSurrogate(c))
-            {
-                if (i + 1 < value.Length && char.IsLowSurrogate(value[i + 1]))
-                {
-                    sb.Append(c).Append(value[i + 1]);
-                    i++;
-                    continue;
-                }
-
-                throw new ArgumentException("String contains a lone high surrogate; it cannot be serialized to UTF-8", nameof(value));
-            }
-
-            if (char.IsLowSurrogate(c))
-            {
-                throw new ArgumentException("String contains a lone low surrogate; it cannot be serialized to UTF-8", nameof(value));
-            }
-
-            switch (c)
-            {
-                case '\n': sb.Append("\\n"); break;
-                case '"': sb.Append("\\\""); break;
-                case '\\': sb.Append("\\\\"); break;
-                case '\r': sb.Append("\\r"); break;
-                case '\t': sb.Append("\\t"); break;
-                case '\b': sb.Append("\\b"); break;
-                case '\f': sb.Append("\\f"); break;
-                default:
-                    if (c < 0x20)
-                    {
-                        sb.Append("\\u").Append(((int)c).ToString("x4"));
-                    }
-                    else
-                    {
-                        sb.Append(c);
-                    }
-
-                    break;
-            }
-        }
-
-        sb.Append('"');
-    }
+    public static byte[] CanonicalEventBytes(string pubkey, long createdAt, int kind, IReadOnlyList<IReadOnlyList<string>> tags, string content) =>
+        NostrEventCanonicalization.CanonicalEventBytes(pubkey, createdAt, kind, tags, content);
 
     public static string EventMessage(NostrEvent e)
     {

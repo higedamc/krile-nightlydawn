@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>NightlyDawn.Keys</AssemblyName>
+    <RootNamespace>NightlyDawn.Keys</RootNamespace>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NBitcoin.Secp256k1" Version="4.0.3" />
+    <PackageReference Include="NSec.Cryptography" Version="25.4.0" />
+    <PackageReference Include="BouncyCastle.Cryptography" Version="2.7.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NightlyDawn.Core\NightlyDawn.Core.csproj" />
+  </ItemGroup>
+
+</Project>
