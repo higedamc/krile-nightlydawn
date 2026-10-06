@@ -10,7 +10,8 @@ namespace NightlyDawn.Nostr.Timelines;
 /// <see cref="Note"/>s. <see cref="InitialLoadComplete"/> is emitted once every relay that was connected when the
 /// stream started has sent EOSE (B6: never just the fastest relay), or when <c>initialLoadTimeout</c> elapses
 /// first — a relay that never sends EOSE must not keep the column in its loading state forever. Events the mapper
-/// rejects are skipped (and counted by the mapper, B10); the same event seen on several relays is yielded once (B7).
+/// rejects are skipped (and counted by the mapper, B10); the same event seen on several relays is yielded once (B7),
+/// remembering at most <c>maxRememberedIds</c> ids (<see cref="NostrBackendOptions.MaxRememberedEventIdsPerTimeline"/>, FIFO).
 /// </summary>
 internal sealed class NostrTimelineSource(
     NostrBackend backend,
@@ -18,6 +19,7 @@ internal sealed class NostrTimelineSource(
     CompiledFilter filter,
     Func<CancellationToken, Task> ensureConnected,
     TimeSpan initialLoadTimeout,
+    int maxRememberedIds,
     ILogger logger) : ITimelineSource
 {
     public async IAsyncEnumerable<TimelineUpdate> StreamAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
@@ -33,7 +35,7 @@ internal sealed class NostrTimelineSource(
 
         logger.LogInformation("Timeline: subscribing on {Count} relays", pendingEose.Count);
 
-        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var seen = new RememberedIds(maxRememberedIds);
         var loaded = false;
 
         // The inner subscription gets its own linked token: when the consumer stops enumerating while a MoveNextAsync is
@@ -68,8 +70,8 @@ internal sealed class NostrTimelineSource(
                         var note = TryMap(received.Event);
                         if (note is not null && seen.Add(note.Id) && (filter.LocalPredicate?.Invoke(note) ?? true))
                         {
-                            // First relay to deliver the event wins the SeenOnRelays slot; the duplicates from other relays are dropped above.
-                            yield return new NoteArrived(note with { SeenOnRelays = [received.RelayUrl.Value] });
+                            // First relay to deliver the event is recorded; the duplicates from other relays are dropped above.
+                            yield return new NoteArrived(note with { FirstSeenOnRelay = received.RelayUrl });
                         }
 
                         break;
@@ -154,6 +156,30 @@ internal sealed class NostrTimelineSource(
         }
 
         return notes;
+    }
+
+    /// <summary>Bounded set of event ids with FIFO eviction. <see cref="Add"/> returns false for an id still remembered.</summary>
+    private sealed class RememberedIds(int capacity)
+    {
+        private readonly HashSet<string> _set = new(StringComparer.Ordinal);
+        private readonly Queue<string> _order = new();
+        private readonly int _capacity = capacity >= 1 ? capacity : throw new ArgumentOutOfRangeException(nameof(capacity));
+
+        public bool Add(string id)
+        {
+            if (!_set.Add(id))
+            {
+                return false;
+            }
+
+            _order.Enqueue(id);
+            while (_order.Count > _capacity)
+            {
+                _set.Remove(_order.Dequeue());
+            }
+
+            return true;
+        }
     }
 
     private Note? TryMap(NostrEvent e)
