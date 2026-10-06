@@ -174,4 +174,15 @@ public class Bech32Tests
         Assert.False(ok);
         Assert.Empty(payload);
     }
+
+    [Fact]
+    public void TryDecode_ReturnsFalse_ForNull()
+    {
+        // The Try prefix promises no throw; a null-propagated string (e.g. an empty UI
+        // text box bound to a nullable property) must not escape as NullReferenceException.
+        var ok = Bech32.TryDecode("x", null!, out var payload);
+
+        Assert.False(ok);
+        Assert.Empty(payload);
+    }
 }

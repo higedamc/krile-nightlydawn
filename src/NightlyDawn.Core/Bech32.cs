@@ -47,9 +47,15 @@ public static class Bech32
         return EncodeFromFiveBitGroups(hrp, data);
     }
 
-    /// <summary>Decodes a bech32 string whose human-readable part must equal <paramref name="expectedHrp"/>. Returns <see langword="false"/> (with <paramref name="payload"/> set to an empty array) for any malformed or checksum-invalid input, rather than throwing — this is the surface external callers (UI, query compiler) should use.</summary>
+    /// <summary>Decodes a bech32 string whose human-readable part must equal <paramref name="expectedHrp"/>. Returns <see langword="false"/> (with <paramref name="payload"/> set to an empty array) for any malformed or checksum-invalid input, including a null <paramref name="bech32"/>, rather than throwing — this is the surface external callers (UI, query compiler) should use. The <c>Try</c> prefix is a promise, not just a naming convention: callers reach for this precisely because they don't want to wrap a call in <c>try</c>/<c>catch</c> themselves.</summary>
     public static bool TryDecode(string expectedHrp, string bech32, out byte[] payload)
     {
+        if (bech32 is null)
+        {
+            payload = [];
+            return false;
+        }
+
         try
         {
             payload = Decode(expectedHrp, bech32);
