@@ -68,14 +68,21 @@ public sealed class LocalKeyStore(IKeyFileStore fileStore) : IKeyStore
     {
         var payload = Bech32.Decode("ncryptsec", nip49EncryptedKey);
         var rawKey = Nip49KeyEncryption.Decrypt(payload, passphrase);
+        try
+        {
+            // Preserve the imported key's own recorded security history rather than
+            // overwriting it — an imported key does not become "freshly generated".
+            var keySecurity = Nip49KeyEncryption.ReadKeySecurity(payload);
 
-        // Preserve the imported key's own recorded security history rather than
-        // overwriting it — an imported key does not become "freshly generated".
-        var keySecurity = Nip49KeyEncryption.ReadKeySecurity(payload);
-
-        var descriptor = SetActiveKey(rawKey, keySecurity);
-        await fileStore.WriteAsync(nip49EncryptedKey, cancellationToken).ConfigureAwait(false);
-        return descriptor;
+            var descriptor = SetActiveKey(rawKey, keySecurity);
+            await fileStore.WriteAsync(nip49EncryptedKey, cancellationToken).ConfigureAwait(false);
+            return descriptor;
+        }
+        finally
+        {
+            // SetActiveKey keeps its own copy; the decrypted buffer must not linger on the heap (B1, PR #11 review).
+            CryptographicOperations.ZeroMemory(rawKey);
+        }
     }
 
     public async Task<SignerDescriptor> GenerateLocalKeyAsync(ReadOnlyMemory<char> passphrase, CancellationToken cancellationToken = default)
@@ -113,7 +120,14 @@ public sealed class LocalKeyStore(IKeyFileStore fileStore) : IKeyStore
         return Task.FromResult(EncryptActiveKey(passphrase, DefaultLogN));
     }
 
+    /// <summary>Destructive: wipes memory <em>and</em> deletes the persisted ciphertext. See <see cref="LockAsync"/> for the non-destructive counterpart.</summary>
     public Task SignOutAsync(CancellationToken cancellationToken = default)
+    {
+        ClearActiveKey();
+        return fileStore.DeleteAsync(cancellationToken);
+    }
+
+    private void ClearActiveKey()
     {
         if (_privateKey is not null)
         {
@@ -123,8 +137,34 @@ public sealed class LocalKeyStore(IKeyFileStore fileStore) : IKeyStore
         _privateKey = null;
         _pubkeyHex = null;
         _keySecurity = default;
+    }
 
-        return fileStore.DeleteAsync(cancellationToken);
+    public async Task<bool> HasStoredKeyAsync(CancellationToken cancellationToken = default) =>
+        await fileStore.ReadAsync(cancellationToken).ConfigureAwait(false) is not null;
+
+    /// <summary>Decrypts the persisted <c>ncryptsec1</c> for this session. Deliberately does not call <see cref="IKeyFileStore.WriteAsync"/>: the stored bytes are already what we want on disk, and rewriting on every unlock would turn a read-only action into a write to the only copy.</summary>
+    public async Task<SignerDescriptor> UnlockStoredKeyAsync(ReadOnlyMemory<char> passphrase, CancellationToken cancellationToken = default)
+    {
+        var stored = await fileStore.ReadAsync(cancellationToken).ConfigureAwait(false)
+            ?? throw new SignerUnavailableException("No local key is stored. Generate or import one first.");
+
+        var payload = Bech32.Decode("ncryptsec", stored);
+        var rawKey = Nip49KeyEncryption.Decrypt(payload, passphrase);
+        try
+        {
+            return SetActiveKey(rawKey, Nip49KeyEncryption.ReadKeySecurity(payload));
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(rawKey); // SetActiveKey cloned it; this copy must not linger (B1)
+        }
+    }
+
+    /// <summary>Memory only: zeroes and drops the active key, leaves the stored <c>ncryptsec1</c> untouched. The non-destructive way to end a session (PR #11 review, B2).</summary>
+    public Task LockAsync(CancellationToken cancellationToken = default)
+    {
+        ClearActiveKey();
+        return Task.CompletedTask;
     }
 
     private SignerDescriptor RequireActiveSigner()

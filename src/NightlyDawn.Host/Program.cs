@@ -1,5 +1,6 @@
 using Avalonia;
 using NightlyDawn.App;
+using NightlyDawn.Keys;
 using NightlyDawn.Nostr.Timelines;
 
 namespace NightlyDawn.Host;
@@ -43,6 +44,21 @@ internal static class Program
         AppServices.TimelineSourceFactory = timelineSourceFactory;
         AppServices.ScreenshotPath = Environment.GetEnvironmentVariable(ScreenshotEnvVar);
         Console.Error.WriteLine($"[NightlyDawn] relays: {string.Join(", ", relays.Select(r => r.Value))}");
+
+        // Local NIP-49 key store (leaf 1b), wired here so the App only ever sees Core's IKeyStore. The timeline
+        // never consults it: reading public notes needs no key, and the Keys panel is the only consumer.
+        try
+        {
+            var dataDir = AppDataPaths.ResolveFromEnvironment();
+            var keyFile = AppDataPaths.EnsureLocalKeyFile(dataDir);
+            AppServices.KeyStore = new LocalKeyStore(new FileKeyFileStore(keyFile));
+            Console.Error.WriteLine($"[NightlyDawn] data dir: {dataDir}");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // No data directory means no key store; the timeline still works. The panel shows the store as unavailable.
+            Console.Error.WriteLine($"[NightlyDawn] key store unavailable: {ex.GetType().Name}");
+        }
 
         try
         {

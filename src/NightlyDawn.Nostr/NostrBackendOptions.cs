@@ -15,6 +15,9 @@ public sealed class NostrBackendOptions
     /// <summary>Upper bound on distinct events a single <see cref="NostrBackend.FetchAsync"/> keeps. A relay that floods a REQ cannot grow memory past this; excess events are dropped and counted.</summary>
     public int MaxEventsPerFetch { get; init; } = 10_000;
 
+    /// <summary>Upper bound on event ids a live timeline column remembers for cross-relay deduplication. Oldest ids are evicted first; an event re-delivered after its id was evicted shows up once more (benign and visible), whereas no bound means a day-long session grows without limit.</summary>
+    public int MaxRememberedEventIdsPerTimeline { get; init; } = 10_000;
+
     /// <summary>Relay-authored free text (OK / CLOSED reasons) is truncated to this many characters before it is stored or surfaced. It is never logged.</summary>
     public int MaxRelayReasonChars { get; init; } = 200;
 

@@ -67,7 +67,7 @@ public sealed class NostrTimelineSourceFactory : ITimelineSourceFactory, IAsyncD
     {
         ArgumentNullException.ThrowIfNull(timeline);
         var compiled = _compiler.Compile(timeline.KqlQuery);
-        return new NostrTimelineSource(_backend, _backend.Mapper, compiled, EnsureConnectedAsync, _initialLoadTimeout, _logger);
+        return new NostrTimelineSource(_backend, _backend.Mapper, compiled, EnsureConnectedAsync, _initialLoadTimeout, _backend.Options.MaxRememberedEventIdsPerTimeline, _logger);
     }
 
     public async ValueTask DisposeAsync()

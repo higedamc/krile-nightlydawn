@@ -16,6 +16,56 @@
     <TextBlock DockPanel.Dock="Bottom" Opacity="0.5" FontSize="12" Margin="0,8,0,0"
                Text="Based on Krile StarryEyes by Karno (MIT). New code (C) 2026 Krile NightlyDawn contributors." />
 
+    <!-- Keys (goal ②'s UI half). Collapsed: the timeline never needs a key, so this panel is optional for ③. -->
+    <Expander x:Name="KeysExpander" DockPanel.Dock="Bottom" Margin="0,12,0,0" IsExpanded="False" Header="Keys">
+      <StackPanel Spacing="8" Margin="0,8,0,0">
+        <TextBlock x:Name="KeyStatus" TextWrapping="Wrap" Opacity="0.8" />
+
+        <!-- No key: generate -->
+        <StackPanel x:Name="GenerateBox" Spacing="6">
+          <TextBlock Text="This passphrase is the only thing protecting the key. NIP-49 recommends never publishing an ncryptsec: a weak passphrase can be brute-forced (about 100 ms per guess at the default cost)."
+                     TextWrapping="Wrap" Opacity="0.7" FontSize="12" />
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBox x:Name="GeneratePassphrase" Width="240" PasswordChar="●" PlaceholderText="Passphrase" />
+            <TextBox x:Name="GenerateConfirm" Width="240" PasswordChar="●" PlaceholderText="Repeat passphrase" />
+            <Button Content="Generate key" Click="OnGenerateKeyClick" />
+          </StackPanel>
+        </StackPanel>
+
+        <!-- Stored but locked: unlock -->
+        <StackPanel x:Name="UnlockBox" Orientation="Horizontal" Spacing="8">
+          <TextBox x:Name="UnlockPassphrase" Width="240" PasswordChar="●" PlaceholderText="Passphrase" />
+          <Button Content="Unlock" Click="OnUnlockClick" />
+        </StackPanel>
+
+        <!-- Unlocked -->
+        <StackPanel x:Name="UnlockedBox" Spacing="6">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBlock Text="Public key (hex):" Opacity="0.7" />
+            <TextBlock x:Name="PubkeyText" FontFamily="monospace" />
+          </StackPanel>
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBox x:Name="ExportPassphrase" Width="240" PasswordChar="●" PlaceholderText="Passphrase for the export" />
+            <Button Content="Export (ncryptsec)" Click="OnExportClick" />
+            <Button Content="Lock" Click="OnLockClick" />
+          </StackPanel>
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button x:Name="SignOutButton" Content="Sign out (deletes the stored key from this device)" Click="OnSignOutClick" />
+            <Button x:Name="CancelSignOutButton" Content="Cancel" Click="OnCancelSignOutClick" IsVisible="False" />
+          </StackPanel>
+          <StackPanel x:Name="ExportBox" Spacing="6">
+            <TextBlock Text="This is the encrypted form (ncryptsec); it needs your passphrase to use. Copying puts it on the system clipboard, which other apps on this account and Universal Clipboard can read. Nothing is copied until you press Copy."
+                       TextWrapping="Wrap" Opacity="0.7" FontSize="12" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBox x:Name="ExportedKey" Width="520" IsReadOnly="True" FontFamily="monospace" />
+              <Button Content="Copy" Click="OnCopyExportClick" />
+              <Button Content="Clear" Click="OnClearExportClick" />
+            </StackPanel>
+          </StackPanel>
+        </StackPanel>
+      </StackPanel>
+    </Expander>
+
     <!-- Omarchy / Wayland spike panel from the app shell (#3); collapsed now that the column is the main content. -->
     <Expander DockPanel.Dock="Bottom" Margin="0,12,0,0" IsExpanded="False"
               Header="Platform check (Omarchy / Wayland spike)">
