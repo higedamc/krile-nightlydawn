@@ -76,6 +76,9 @@ public interface ITimelineSource
 public interface ITimelineSourceFactory
 {
     ITimelineSource Create(Timeline timeline, Account account);
+
+    /// <summary>A read-only source for public notes: no account and no signer is involved. This is the path the UI uses before any key exists (1e); it must never be given a placeholder <see cref="Account"/> instead.</summary>
+    ITimelineSource CreateAnonymous(Timeline timeline);
 }
 
 /// <summary>KQL parsing and relay-filter compilation. Implemented in phase 1c (NightlyDawn.Filters, ported from StarryEyes/Filters).</summary>
