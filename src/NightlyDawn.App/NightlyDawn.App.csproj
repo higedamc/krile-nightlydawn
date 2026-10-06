@@ -1,7 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <!-- Library since leaf 1f: the executable is src/NightlyDawn.Host (composition root). This project holds the
+       views and view models only and must stay free of infrastructure references (B9). -->
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
     <AssemblyName>NightlyDawn.App</AssemblyName>
     <RootNamespace>NightlyDawn.App</RootNamespace>
     <!-- Avalonia: compiled XAML bindings by default; no icon yet (plan D3: new branding, not krile.ico). -->
@@ -13,11 +14,8 @@
 
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.1.3" />
-    <PackageReference Include="Avalonia.Desktop" Version="12.1.3" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.3" />
-    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.3" />
-    <!-- Native Wayland backend for Omarchy/Hyprland; falls back to X11 (XWayland) when WAYLAND_DISPLAY is absent. -->
-    <PackageReference Include="Avalonia.Wayland" Version="12.1.3" />
+    <!-- Platform backends (Desktop, Wayland) and the Inter font live in NightlyDawn.Host, where AppBuilder is configured. -->
   </ItemGroup>
 
   <!-- Avalonia 12 ships Roslyn 4.14 analyzers/generators; the .NET 8 SDK compiler (Roslyn 4.11) refuses to load
@@ -30,7 +28,7 @@
   </Target>
 
   <!-- No reference to NightlyDawn.Nostr: the App reaches the relay layer only through Core's
-       ITimelineSourceFactory / INostrBackend contracts (B9). Composition happens in leaf 1f.
+       ITimelineSourceFactory / INostrBackend contracts (B9). Composition happens in src/NightlyDawn.Host.
        tests/NightlyDawn.App.Tests/ArchitectureTests.cs fails the build's test run if this changes. -->
   <ItemGroup>
     <ProjectReference Include="..\NightlyDawn.Core\NightlyDawn.Core.csproj" />

@@ -37,18 +37,14 @@ public sealed partial class MainWindow : Window
 
     private void OnSubscribeClick(object? sender, RoutedEventArgs e) => _timeline.Subscribe();
 
-    /// <summary>
-    /// Spike helper: when <c>NIGHTLYDAWN_SCREENSHOT=/path/to.png</c> is set, render the window
-    /// offscreen to that file after it has laid out, then exit. Works without a display server
-    /// screenshot tool (headless Macs, Wayland compositors without a grabber).
-    /// </summary>
-    private const string ScreenshotEnvVar = "NIGHTLYDAWN_SCREENSHOT";
-
     private void OnOpened(object? sender, EventArgs e)
     {
         _platformInfo.Text = DescribePlatform();
 
-        var screenshotPath = Environment.GetEnvironmentVariable(ScreenshotEnvVar);
+        // Spike helper: when the host set a screenshot path (from NIGHTLYDAWN_SCREENSHOT), render the window
+        // offscreen to that file after it has laid out, then exit. Works without a display-server screenshot
+        // tool (headless Macs, Wayland compositors without a grabber).
+        var screenshotPath = AppServices.ScreenshotPath;
         if (string.IsNullOrWhiteSpace(screenshotPath))
         {
             return;
