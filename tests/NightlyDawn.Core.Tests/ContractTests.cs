@@ -83,7 +83,7 @@ public class ContractTests
         // B14: Value must be uri.AbsoluteUri, not the caller's raw string — otherwise
         // incidental whitespace reaches the WebSocket client, and two inputs denoting
         // the same relay (trailing slash, scheme case) would compare unequal, which
-        // breaks B6's "EOSE from every connected relay" and B7's SeenOnRelays.
+        // breaks B6's "EOSE from every connected relay" and B7's FirstSeenOnRelay.
         var padded = RelayUrl.Parse("  wss://a.example\t");
         var upperScheme = RelayUrl.Parse("WSS://A.Example/");
         var canonical = RelayUrl.Parse("wss://a.example/");
