@@ -37,7 +37,7 @@ Requires the .NET 8 SDK (see `global.json`).
 ## Running the app
 
 > **Changed (leaf 1f):** the executable is now `src/NightlyDawn.Host`, not
-> `src/NightlyDawn.App`. If you were told to run `dotnet run --project src/NightlyDawn.Host`,
+> `src/NightlyDawn.App`. If you were told to run `dotnet run --project src/NightlyDawn.App`,
 > use the command below instead; the App project is a library and no longer starts.
 
 ```

@@ -5,7 +5,8 @@ namespace NightlyDawn.App;
 
 /// <summary>
 /// The App layer's single composition point, filled in by the host executable (<c>src/NightlyDawn.Host</c>) before
-/// the Avalonia app starts. Views ask here for contracts from <c>NightlyDawn.Core</c> and never construct a backend
+/// the Avalonia app starts. <b>The host writes these once, before <c>AppBuilder</c> runs; nothing else sets them.</b>
+/// Views ask here for contracts from <c>NightlyDawn.Core</c> and never construct a backend
 /// themselves, so <c>NightlyDawn.App</c> has no reference to <c>NightlyDawn.Nostr</c> (B9; enforced by
 /// <c>ArchitectureTests</c>). Without a host (e.g. a designer preview) the defaults keep the UI usable: the clearly
 /// labelled sample timeline source and no screenshot.
