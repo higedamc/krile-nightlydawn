@@ -21,6 +21,25 @@ namespace NightlyDawn.Keys;
 /// creation) onto the destination, since <c>rename(2)</c> replaces the destination
 /// inode — so this keeps the permission guarantee the delete-then-create approach was
 /// chasing, without its data-loss window.
+///
+/// What each failure mode this protects against, precisely (so "crash-safe" doesn't get
+/// read as "safe against every crash"): a process kill, an exception mid-write, or the
+/// disk filling up all happen before the rename, so they leave the <c>.tmp</c> file
+/// damaged or partial and the real <paramref name="filePath"/> untouched — covered.
+/// <see cref="NativeFileSync.SyncToDisk"/> additionally calls down to <c>fsync</c>
+/// (Linux) / <c>fcntl(F_FULLFSYNC)</c> (macOS) before the rename, so the new content is
+/// durable on the storage device itself, not just handed to the OS page cache — covering
+/// a power loss or kernel panic between the write and the rename. This deliberately does
+/// not use <see cref="FileStream.Flush(bool)"/>'s built-in <c>flushToDisk: true</c>: every
+/// .NET release from 6 through at least 10.0.12 has a confirmed bug
+/// (dotnet/runtime#135201) where that path silently reports success even when the
+/// underlying fsync fails (full disk, I/O error, a flaky network filesystem) — see
+/// <see cref="NativeFileSync"/>'s doc for the mechanism. Not covered: <c>rename(2)</c>
+/// replacing the directory entry is itself only guaranteed durable once the *containing
+/// directory* is fsynced, which this class does not do (needs a second native directory-fd
+/// fsync; not implemented). In the ordinary case this is a vanishingly small window
+/// between two already rare events; it is called out here rather than silently left
+/// unaddressed.
 /// </summary>
 [UnsupportedOSPlatform("windows")]
 public sealed class FileKeyFileStore(string filePath) : IKeyFileStore
@@ -67,7 +86,11 @@ public sealed class FileKeyFileStore(string filePath) : IKeyFileStore
         {
             var bytes = System.Text.Encoding.UTF8.GetBytes(ncryptsec);
             await stream.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
-            await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+            await stream.FlushAsync(cancellationToken).ConfigureAwait(false); // managed buffers -> OS
+
+            // OS page cache -> physical storage, with a real error check (see class doc
+            // for why this isn't FileStream.Flush(flushToDisk: true)).
+            NativeFileSync.SyncToDisk(stream.SafeFileHandle);
         }
 
         File.Move(tempPath, filePath, overwrite: true);
