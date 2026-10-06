@@ -31,8 +31,8 @@ public sealed record NostrFilter(
     int? Limit = null,
     string? Search = null);
 
-/// <summary>A relay URL restricted to <c>wss://</c> unless the caller opts into <c>ws://</c> for local development (plan §5 security requirement, S3).</summary>
-public readonly record struct RelayUrl
+/// <summary>A relay URL restricted to <c>wss://</c> unless the caller opts into <c>ws://</c> for local development (plan §5 security requirement, S3). <see cref="Parse"/> is the only way to construct one — this is a <c>sealed record</c> (reference type), not a struct, so there is no public parameterless constructor to bypass validation via <c>default</c>/<c>new RelayUrl[n]</c> (B12).</summary>
+public sealed record RelayUrl
 {
     public string Value { get; }
 
@@ -40,12 +40,17 @@ public readonly record struct RelayUrl
 
     public static RelayUrl Parse(string value, bool allowInsecureForDevelopment = false)
     {
-        if (value.StartsWith("wss://", StringComparison.Ordinal))
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri))
+        {
+            throw new ArgumentException($"Relay URL is not a valid absolute URI: {value}", nameof(value));
+        }
+
+        if (string.Equals(uri.Scheme, "wss", StringComparison.OrdinalIgnoreCase))
         {
             return new RelayUrl(value);
         }
 
-        if (allowInsecureForDevelopment && value.StartsWith("ws://", StringComparison.Ordinal))
+        if (allowInsecureForDevelopment && string.Equals(uri.Scheme, "ws", StringComparison.OrdinalIgnoreCase))
         {
             return new RelayUrl(value);
         }

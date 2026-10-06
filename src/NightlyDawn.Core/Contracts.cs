@@ -2,24 +2,28 @@ using System.Threading;
 
 namespace NightlyDawn.Core;
 
-/// <summary>Relay pool: connect, subscribe, publish, and fetch profiles/relay lists. Implemented in phase 1a by a Nostr.Sdk adapter (NightlyDawn.Nostr). Does not sign — callers pass already-signed events from <see cref="IKeyStore"/>.</summary>
+/// <summary>Relay pool: connect, subscribe, publish, and fetch profiles/relay lists. Implemented in phase 1a by a Nostr.Sdk adapter (NightlyDawn.Nostr). Does not sign — callers pass already-signed events from <see cref="IKeyStore"/>.
+/// <para>Relays are adversarial input. Implementations MUST verify every incoming event before yielding or returning it — <c>id</c> equal to the SHA-256 of the NIP-01 serialization, and <c>sig</c> valid under BIP-340 for <c>pubkey</c> — and drop events that fail rather than surfacing them. Callers may assume any event this interface hands them, directly or via a derived type like <see cref="RelayListEntry"/>, is authenticated (B13).</para>
+/// </summary>
 public interface INostrBackend
 {
     Task ConnectAsync(IReadOnlyCollection<RelayUrl> relayUrls, CancellationToken cancellationToken = default);
 
     Task DisconnectAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>Live subscription. Prefer <see cref="FetchAsync"/> for a one-shot query that needs to know when stored events are exhausted.</summary>
+    /// <summary>Live subscription. Prefer <see cref="FetchAsync"/> for a one-shot query that needs to know when stored events are exhausted. Only verified events are yielded (see interface summary).</summary>
     IAsyncEnumerable<SubscriptionMessage> SubscribeAsync(NostrFilter filter, CancellationToken cancellationToken = default);
 
-    /// <summary>One-shot query: waits for EOSE from every currently-connected relay, not just the first, before returning (B6, meiso Q1).</summary>
+    /// <summary>One-shot query: waits for EOSE from every currently-connected relay, not just the first, before returning (B6, meiso Q1). Only verified events are returned (see interface summary).</summary>
     Task<IReadOnlyList<NostrEvent>> FetchAsync(NostrFilter filter, CancellationToken cancellationToken = default);
 
     /// <exception cref="EventPublishException">No relay accepted the event.</exception>
     Task<PublishResult> PublishAsync(NostrEvent signedEvent, CancellationToken cancellationToken = default);
 
+    /// <summary>Returns a verified kind:0 event, or null (see interface summary).</summary>
     Task<NostrEvent?> FetchProfileEventAsync(string pubkey, CancellationToken cancellationToken = default);
 
+    /// <summary>Returns a relay list derived from a verified kind:10002 event, or null (see interface summary).</summary>
     Task<RelayListEntry?> FetchRelayListAsync(string pubkey, CancellationToken cancellationToken = default);
 }
 

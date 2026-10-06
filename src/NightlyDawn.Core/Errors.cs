@@ -11,7 +11,7 @@ public abstract class NightlyDawnException : Exception
     }
 }
 
-/// <summary>No signer is connected (NIP-07 absent, NIP-46 never paired, no local key imported).</summary>
+/// <summary>No signer is connected — NIP-46 never paired, or no local key generated/imported (B2: NIP-07 is not a signer path here).</summary>
 public sealed class SignerUnavailableException(string message) : NightlyDawnException(message);
 
 /// <summary>A NIP-46 remote signer request exceeded its timeout (plan §5 D4: 30s).</summary>

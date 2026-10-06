@@ -1,3 +1,4 @@
+using System.Reflection;
 using Xunit;
 
 namespace NightlyDawn.Core.Tests;
@@ -67,6 +68,21 @@ public class ContractTests
         var relay = RelayUrl.Parse("ws://localhost:4869", allowInsecureForDevelopment: true);
 
         Assert.Equal("ws://localhost:4869", relay.ToString());
+    }
+
+    [Fact]
+    public void RelayUrl_RejectsEmbeddedControlCharacters()
+    {
+        // A bare StartsWith("wss://") check would have let this through (B12).
+        Assert.Throws<ArgumentException>(() => RelayUrl.Parse("wss://relay.example\r\nSec-Fetch: fake"));
+    }
+
+    [Fact]
+    public void RelayUrl_HasNoPublicParameterlessConstructor()
+    {
+        var publicConstructors = typeof(RelayUrl).GetConstructors();
+
+        Assert.Empty(publicConstructors);
     }
 
     [Fact]
