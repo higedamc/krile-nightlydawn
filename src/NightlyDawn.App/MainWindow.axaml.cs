@@ -7,6 +7,7 @@ using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
+using NightlyDawn.App.Timelines;
 
 namespace NightlyDawn.App;
 
@@ -15,6 +16,7 @@ public sealed partial class MainWindow : Window
     private readonly TextBlock _platformInfo;
     private readonly TextBox _clipboardProbe;
     private readonly TextBlock _clipboardStatus;
+    private readonly TimelineColumnViewModel _timeline;
 
     public MainWindow()
     {
@@ -22,8 +24,18 @@ public sealed partial class MainWindow : Window
         _platformInfo = this.FindControl<TextBlock>("PlatformInfo")!;
         _clipboardProbe = this.FindControl<TextBox>("ClipboardProbe")!;
         _clipboardStatus = this.FindControl<TextBlock>("ClipboardStatus")!;
+
+        // One read-only column for now (1e). The factory comes from the composition point, never from NightlyDawn.Nostr (B9).
+        _timeline = new TimelineColumnViewModel(
+            AppServices.TimelineSourceFactory,
+            postToUi: action => Dispatcher.UIThread.Post(action));
+        DataContext = _timeline;
+
         Opened += OnOpened;
+        Closed += (_, _) => _timeline.Dispose();
     }
+
+    private void OnSubscribeClick(object? sender, RoutedEventArgs e) => _timeline.Subscribe();
 
     /// <summary>
     /// Spike helper: when <c>NIGHTLYDAWN_SCREENSHOT=/path/to.png</c> is set, render the window
