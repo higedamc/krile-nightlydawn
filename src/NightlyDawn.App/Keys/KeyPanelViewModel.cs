@@ -68,11 +68,37 @@ public sealed class KeyPanelViewModel : INotifyPropertyChanged
         private set => SetField(ref _status, value);
     }
 
-    /// <summary>Hex pubkey of the unlocked key. npub rendering arrives once Bech32 lives in Core.</summary>
+    /// <summary>Hex pubkey of the unlocked key (what relays and filters use).</summary>
     public string? PubkeyHex
     {
         get => _pubkeyHex;
-        private set => SetField(ref _pubkeyHex, value);
+        private set
+        {
+            if (SetField(ref _pubkeyHex, value))
+            {
+                Raise(nameof(Npub));
+            }
+        }
+    }
+
+    /// <summary>NIP-19 <c>npub1…</c> form of <see cref="PubkeyHex"/> (public data; safe to show and copy). Null when locked or when the hex is malformed.</summary>
+    public string? Npub => ToNpub(_pubkeyHex);
+
+    internal static string? ToNpub(string? pubkeyHex)
+    {
+        if (pubkeyHex is null || pubkeyHex.Length != 64)
+        {
+            return null;
+        }
+
+        try
+        {
+            return Bech32.Encode("npub", Convert.FromHexString(pubkeyHex));
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
     }
 
     /// <summary>The last export result (NIP-49 ciphertext). Shown read-only; copied only on an explicit Copy.</summary>

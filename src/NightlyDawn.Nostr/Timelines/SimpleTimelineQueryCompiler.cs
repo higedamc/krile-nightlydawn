@@ -8,7 +8,7 @@ namespace NightlyDawn.Nostr.Timelines;
 /// tokens, each one of
 /// <list type="bullet">
 /// <item><c>kind:1</c> / <c>kinds:1,6,16</c> — event kinds (default: <c>1</c>)</item>
-/// <item><c>author:&lt;hex64&gt;</c> / <c>authors:a,b</c> — author pubkeys as 64-char hex (npub arrives once bech32 lives in Core)</item>
+/// <item><c>author:&lt;hex64 | npub1…&gt;</c> / <c>authors:a,b</c> — author pubkeys as 64-char hex or NIP-19 npub (decoded to hex)</item>
 /// <item><c>#nostr</c> / <c>t:nostr</c> / <c>tags:a,b</c> — <c>#t</c> hashtag filter, lower-cased (NIP-24)</item>
 /// <item><c>limit:50</c> — relay-side limit, clamped to [1, <see cref="MaxLimit"/>] (default: <see cref="DefaultLimit"/>)</item>
 /// </list>
@@ -83,15 +83,24 @@ public sealed class SimpleTimelineQueryCompiler(int defaultLimit = 50, int maxLi
                 case "author" or "authors":
                     foreach (var value in values)
                     {
+                        string hex;
                         if (value.StartsWith("npub1", StringComparison.OrdinalIgnoreCase))
                         {
-                            throw new FilterParseException("npub is not accepted yet; use the 64-character hex pubkey.");
-                        }
+                            // NIP-19: npub1… is bech32 over the 32-byte x-only pubkey. Checksum failures and wrong lengths are rejected here.
+                            if (!Bech32.TryDecode("npub", value.ToLowerInvariant(), out var pubkeyBytes) || pubkeyBytes.Length != 32)
+                            {
+                                throw new FilterParseException($"'{Echo(value)}' is not a valid npub.");
+                            }
 
-                        var hex = value.ToLowerInvariant();
-                        if (!EventVerifier.IsLowerHex(hex, 64))
+                            hex = Convert.ToHexString(pubkeyBytes).ToLowerInvariant();
+                        }
+                        else
                         {
-                            throw new FilterParseException($"'{Echo(value)}' is not a 64-character hex pubkey.");
+                            hex = value.ToLowerInvariant();
+                            if (!EventVerifier.IsLowerHex(hex, 64))
+                            {
+                                throw new FilterParseException($"'{Echo(value)}' is not a 64-character hex pubkey or an npub.");
+                            }
                         }
 
                         if (!authors.Contains(hex))

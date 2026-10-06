@@ -87,11 +87,29 @@ public class SimpleTimelineQueryCompilerTests
     }
 
     [Fact]
-    public void Npub_IsRejected_WithAHintToUseHex()
+    public void Npub_IsAccepted_AndDecodedToTheSameHexAsTheHexForm()
     {
-        var ex = Assert.Throws<FilterParseException>(() => _compiler.Compile("author:npub1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"));
+        var npub = Bech32.Encode("npub", Convert.FromHexString(HexA));
 
-        Assert.Contains("hex", ex.Message, StringComparison.Ordinal);
+        var fromNpub = _compiler.Compile($"author:{npub}").RelayFilter.Authors;
+        var fromUpper = _compiler.Compile($"author:{npub.ToUpperInvariant()}").RelayFilter.Authors;
+        var mixed = _compiler.Compile($"authors:{npub},{HexB},{HexA}").RelayFilter.Authors;
+
+        Assert.Equal([HexA], fromNpub);
+        Assert.Equal([HexA], fromUpper);
+        Assert.Equal([HexA, HexB], mixed); // npub and its hex twin are the same author, deduplicated
+    }
+
+    [Fact]
+    public void Npub_WithABadChecksumOrWrongLength_IsRejected()
+    {
+        var npub = Bech32.Encode("npub", Convert.FromHexString(HexA));
+        var corrupted = npub[..^1] + (npub[^1] == 'q' ? 'p' : 'q');
+        var tooShort = Bech32.Encode("npub", Convert.FromHexString(HexA)[..31]);
+
+        Assert.Throws<FilterParseException>(() => _compiler.Compile($"author:{corrupted}"));
+        Assert.Throws<FilterParseException>(() => _compiler.Compile($"author:{tooShort}"));
+        Assert.Throws<FilterParseException>(() => _compiler.Compile("author:npub1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"));
     }
 
     [Fact]

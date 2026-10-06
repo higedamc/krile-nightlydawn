@@ -53,7 +53,7 @@ Query syntax (minimal, until the KQL compiler lands in leaf 1c):
 | Token | Meaning | Example |
 |---|---|---|
 | `kind:N` / `kinds:1,6` | event kinds (default `1`) | `kind:1` |
-| `author:<hex>` / `authors:a,b` | author pubkeys as 64-char hex (npub later) | `author:3bf0c63f…` |
+| `author:<hex or npub1…>` / `authors:a,b` | author pubkeys as 64-char hex or NIP-19 npub | `author:npub180cvv0…` |
 | `#tag` / `t:tag` / `tags:a,b` | `#t` hashtag filter, case-insensitive | `#nostr` |
 | `limit:N` | relay-side limit (default 50, max 500) | `limit:100` |
 
@@ -79,7 +79,7 @@ optional and independent of the timeline:
   no recovery without it.**
 - *Key stored, locked* (every new launch): enter the passphrase and press
   **Unlock**. Unlocking does not rewrite the stored file.
-- *Unlocked*: the public key (hex) is shown. **Export (ncryptsec)** re-encrypts
+- *Unlocked*: the public key is shown as `npub1…` (with a **Copy npub** button; the hex form underneath). **Export (ncryptsec)** re-encrypts
   the key under a passphrase you type and shows the result read-only; nothing
   reaches the clipboard until you press **Copy** (the clipboard is readable by
   other apps on this account and may sync to other devices). **Lock** ends the

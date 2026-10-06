@@ -180,6 +180,37 @@ public class KeyPanelViewModelTests
     }
 
     [Fact]
+    public async Task Npub_IsDerivedFromTheUnlockedPubkey_RoundTrips_AndClearsOnLock()
+    {
+        var hex = "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d";
+        var store = new FakeKeyStore { Stored = "x", Active = new SignerDescriptor(hex, SignerKind.Nip49Local) };
+        var vm = New(store);
+        var raised = new List<string?>();
+        vm.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+
+        await vm.RefreshAsync();
+
+        Assert.NotNull(vm.Npub);
+        Assert.StartsWith("npub1", vm.Npub, StringComparison.Ordinal);
+        Assert.True(Bech32.TryDecode("npub", vm.Npub!, out var bytes));
+        Assert.Equal(hex, Convert.ToHexString(bytes).ToLowerInvariant());
+        Assert.Contains(nameof(KeyPanelViewModel.Npub), raised);
+
+        await vm.LockAsync();
+        Assert.Null(vm.Npub);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("abc")]
+    [InlineData("zz00000000000000000000000000000000000000000000000000000000000000")]
+    public void ToNpub_ReturnsNull_ForMalformedHex(string? hex)
+    {
+        Assert.Null(KeyPanelViewModel.ToNpub(hex));
+    }
+
+    [Fact]
     public async Task StateChange_RaisesTheDerivedVisibilityProperties()
     {
         var store = new FakeKeyStore();
