@@ -53,6 +53,41 @@ public class LocalKeyStoreUnlockTests
     }
 
     [Fact]
+    public async Task Lock_EndsTheSession_WithoutTouchingTheFile_AndUnlockBringsItBack()
+    {
+        var file = new MemoryKeyFileStore();
+        var store = new LocalKeyStore(file);
+        var generated = await store.GenerateLocalKeyAsync("correct horse".AsMemory());
+        var writesBefore = file.Writes;
+
+        await store.LockAsync();
+
+        await Assert.ThrowsAsync<SignerUnavailableException>(() => store.GetActiveSignerAsync());
+        Assert.True(await store.HasStoredKeyAsync());
+        Assert.NotNull(file.Content);
+        Assert.Equal(writesBefore, file.Writes);
+
+        var again = await store.UnlockStoredKeyAsync("correct horse".AsMemory());
+        Assert.Equal(generated.Pubkey, again.Pubkey);
+
+        await store.LockAsync();
+        await store.LockAsync(); // idempotent, never throws
+    }
+
+    [Fact]
+    public async Task SignOut_DeletesTheStoredKey_UnlikeLock()
+    {
+        var file = new MemoryKeyFileStore();
+        var store = new LocalKeyStore(file);
+        await store.GenerateLocalKeyAsync("correct horse".AsMemory());
+
+        await store.SignOutAsync();
+
+        Assert.False(await store.HasStoredKeyAsync());
+        Assert.Null(file.Content);
+    }
+
+    [Fact]
     public async Task Unlock_WithNothingStored_IsSignerUnavailable()
     {
         var store = new LocalKeyStore(new MemoryKeyFileStore());

@@ -36,6 +36,7 @@ public sealed class KeyPanelViewModel : INotifyPropertyChanged
     private string? _pubkeyHex;
     private string? _exportedKey;
     private bool _isBusy;
+    private bool _signOutArmed;
 
     public KeyPanelViewModel(IKeyStore? store, Action<Action> postToUi)
     {
@@ -95,6 +96,13 @@ public sealed class KeyPanelViewModel : INotifyPropertyChanged
         private set => SetField(ref _isBusy, value);
     }
 
+    /// <summary>True after the first Sign out press; the second press performs the deletion. Any other action disarms it. Two-step rather than a modal so it is testable without a display.</summary>
+    public bool SignOutArmed
+    {
+        get => _signOutArmed;
+        private set => SetField(ref _signOutArmed, value);
+    }
+
     public bool ShowGenerate => State == KeyPanelState.NoKey;
 
     public bool ShowUnlock => State == KeyPanelState.Locked;
@@ -104,6 +112,7 @@ public sealed class KeyPanelViewModel : INotifyPropertyChanged
     /// <summary>Reads the store's state. Asks nothing that needs a passphrase.</summary>
     public async Task RefreshAsync(CancellationToken cancellationToken = default)
     {
+        SignOutArmed = false;
         if (_store is null)
         {
             Post(() => State = KeyPanelState.Unavailable);
@@ -194,6 +203,7 @@ public sealed class KeyPanelViewModel : INotifyPropertyChanged
             return Task.CompletedTask;
         }
 
+        SignOutArmed = false;
         return RunAsync("Exporting…", async store =>
         {
             var ncryptsec = await store.ExportLocalKeyAsync(passphrase, cancellationToken).ConfigureAwait(false);
@@ -205,8 +215,35 @@ public sealed class KeyPanelViewModel : INotifyPropertyChanged
         });
     }
 
-    public Task SignOutAsync(CancellationToken cancellationToken = default) =>
-        RunAsync("Signing out…", async store =>
+    /// <summary>Non-destructive end of session: the stored key stays on disk and Unlock brings it back.</summary>
+    public Task LockAsync(CancellationToken cancellationToken = default)
+    {
+        SignOutArmed = false;
+        return RunAsync("Locking…", async store =>
+        {
+            await store.LockAsync(cancellationToken).ConfigureAwait(false);
+            Post(() =>
+            {
+                PubkeyHex = null;
+                ExportedKey = null;
+                State = KeyPanelState.Locked;
+                Status = "Locked. Enter the passphrase to unlock again.";
+            });
+        });
+    }
+
+    /// <summary>Two-step: the first call only arms and explains; the second call deletes the stored key. Anything else in between disarms.</summary>
+    public Task SignOutAsync(CancellationToken cancellationToken = default)
+    {
+        if (!SignOutArmed)
+        {
+            SignOutArmed = true;
+            Status = "Press Sign out again to delete the stored key from this device. There is no undo; export first if you want to keep it. Use Lock to just end the session.";
+            return Task.CompletedTask;
+        }
+
+        SignOutArmed = false;
+        return RunAsync("Signing out…", async store =>
         {
             await store.SignOutAsync(cancellationToken).ConfigureAwait(false);
             Post(() =>
@@ -217,8 +254,22 @@ public sealed class KeyPanelViewModel : INotifyPropertyChanged
             await RefreshAsync(cancellationToken).ConfigureAwait(false);
             Post(() => Status = "Signed out. The stored key was removed; import or generate to continue.");
         });
+    }
 
-    public void ClearExport() => ExportedKey = null;
+    public void CancelSignOut()
+    {
+        if (SignOutArmed)
+        {
+            SignOutArmed = false;
+            Status = "Sign out cancelled.";
+        }
+    }
+
+    public void ClearExport()
+    {
+        SignOutArmed = false;
+        ExportedKey = null;
+    }
 
     private async Task RunAsync(string busyStatus, Func<IKeyStore, Task> action)
     {

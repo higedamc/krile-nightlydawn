@@ -82,8 +82,10 @@ optional and independent of the timeline:
 - *Unlocked*: the public key (hex) is shown. **Export (ncryptsec)** re-encrypts
   the key under a passphrase you type and shows the result read-only; nothing
   reaches the clipboard until you press **Copy** (the clipboard is readable by
-  other apps on this account and may sync to other devices). **Sign out** removes
-  the stored key from this device — export first if you want to keep it.
+  other apps on this account and may sync to other devices). **Lock** ends the
+  session and keeps the stored key (Unlock brings it back). **Sign out** deletes
+  the stored key from this device and asks you to press it twice — export first
+  if you want to keep it.
 
 Nothing signs or publishes yet; the key is for identity set-up ahead of posting.
 

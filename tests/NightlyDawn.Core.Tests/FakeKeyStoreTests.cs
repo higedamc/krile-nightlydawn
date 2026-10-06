@@ -79,6 +79,12 @@ public class FakeKeyStoreTests
         public Task<SignerDescriptor> UnlockStoredKeyAsync(ReadOnlyMemory<char> passphrase, CancellationToken cancellationToken = default) =>
             Task.FromResult(new SignerDescriptor(_pubkey ?? throw new SignerUnavailableException("nothing stored"), SignerKind.Nip49Local));
 
+        public Task LockAsync(CancellationToken cancellationToken = default)
+        {
+            _pubkey = null; // the fake has no in-memory key material; _ncryptsec (persistence) is deliberately kept
+            return Task.CompletedTask;
+        }
+
         public Task SignOutAsync(CancellationToken cancellationToken = default)
         {
             _ncryptsec = null;

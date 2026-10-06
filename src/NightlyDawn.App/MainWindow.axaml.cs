@@ -30,6 +30,8 @@ public sealed partial class MainWindow : Window
     private readonly TextBox _exportPassphrase;
     private readonly TextBox _exportedKey;
     private readonly TextBlock _pubkeyText;
+    private readonly Button _signOutButton;
+    private readonly Control _cancelSignOutButton;
 
     public MainWindow()
     {
@@ -57,6 +59,8 @@ public sealed partial class MainWindow : Window
         _exportPassphrase = this.FindControl<TextBox>("ExportPassphrase")!;
         _exportedKey = this.FindControl<TextBox>("ExportedKey")!;
         _pubkeyText = this.FindControl<TextBlock>("PubkeyText")!;
+        _signOutButton = this.FindControl<Button>("SignOutButton")!;
+        _cancelSignOutButton = this.FindControl<Control>("CancelSignOutButton")!;
         _keys.PropertyChanged += (_, _) => RenderKeyPanel();
         RenderKeyPanel();
 
@@ -73,6 +77,8 @@ public sealed partial class MainWindow : Window
         _exportBox.IsVisible = _keys.HasExport;
         _pubkeyText.Text = _keys.PubkeyHex ?? string.Empty;
         _exportedKey.Text = _keys.ExportedKey ?? string.Empty;
+        _signOutButton.Content = _keys.SignOutArmed ? "Confirm: delete the stored key" : "Sign out (deletes the stored key from this device)";
+        _cancelSignOutButton.IsVisible = _keys.SignOutArmed;
     }
 
     /// <summary>
@@ -121,7 +127,11 @@ public sealed partial class MainWindow : Window
     private async void OnExportClick(object? sender, RoutedEventArgs e) =>
         await WithPassphraseAsync(_exportPassphrase, p => _keys.ExportAsync(p));
 
+    private async void OnLockClick(object? sender, RoutedEventArgs e) => await _keys.LockAsync();
+
     private async void OnSignOutClick(object? sender, RoutedEventArgs e) => await _keys.SignOutAsync();
+
+    private void OnCancelSignOutClick(object? sender, RoutedEventArgs e) => _keys.CancelSignOut();
 
     private void OnClearExportClick(object? sender, RoutedEventArgs e) => _keys.ClearExport();
 

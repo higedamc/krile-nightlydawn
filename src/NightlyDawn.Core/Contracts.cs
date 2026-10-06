@@ -59,8 +59,11 @@ public interface IKeyStore
     /// <exception cref="SignerUnavailableException">The active signer is remote (NIP-46); this store never holds its raw key material to export.</exception>
     Task<string> ExportLocalKeyAsync(ReadOnlyMemory<char> passphrase, CancellationToken cancellationToken = default);
 
-    /// <summary>Clears this store's own key state. Callers are responsible for clearing any other <c>nostr.*</c> app state.</summary>
+    /// <summary><b>Destructive.</b> Wipes the active key from memory <em>and deletes the persisted <c>ncryptsec1</c></em>: after this, <see cref="HasStoredKeyAsync"/> is false and the identity is gone from this device unless the user exported it first. Callers are responsible for clearing any other <c>nostr.*</c> app state. To merely end a session, use <see cref="LockAsync"/>.</summary>
     Task SignOutAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Ends the session without touching persistence: zeroes the in-memory key and leaves the stored <c>ncryptsec1</c> exactly as it is, so <see cref="UnlockStoredKeyAsync"/> brings it back. The symmetric counterpart of <see cref="UnlockStoredKeyAsync"/>; a no-op when nothing is unlocked (never throws).</summary>
+    Task LockAsync(CancellationToken cancellationToken = default);
 
     /// <summary>Answers whether there is something to unlock — an encrypted key this store has persisted — without asking for a passphrase. Says nothing about whether that stored material is valid or decryptable; returns false (never throws) when nothing is stored. Lets a UI tell "generate or import" from "enter your passphrase" (Lead-approved addition, 2026-10-07). Revisit as an enum if NIP-46 adds a third stored state.</summary>
     Task<bool> HasStoredKeyAsync(CancellationToken cancellationToken = default);

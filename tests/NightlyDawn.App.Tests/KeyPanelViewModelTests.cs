@@ -108,7 +108,7 @@ public class KeyPanelViewModelTests
     }
 
     [Fact]
-    public async Task SignOut_ClearsEverything_AndReturnsToNoKey()
+    public async Task SignOut_IsTwoStep_FirstPressOnlyArms_SecondDeletes()
     {
         var store = new FakeKeyStore { Stored = "x", Active = new SignerDescriptor("ef".PadRight(64, '0'), SignerKind.Nip49Local) };
         var vm = New(store);
@@ -117,10 +117,66 @@ public class KeyPanelViewModelTests
 
         await vm.SignOutAsync();
 
+        Assert.True(vm.SignOutArmed);
+        Assert.Equal(0, store.SignOuts); // nothing destroyed yet
+        Assert.Equal(KeyPanelState.Unlocked, vm.State);
+        Assert.Contains("no undo", vm.Status);
+        Assert.Contains("Lock", vm.Status);
+
+        await vm.SignOutAsync();
+
+        Assert.False(vm.SignOutArmed);
+        Assert.Equal(1, store.SignOuts);
         Assert.Equal(KeyPanelState.NoKey, vm.State);
         Assert.Null(vm.PubkeyHex);
         Assert.Null(vm.ExportedKey);
-        Assert.Equal(1, store.SignOuts);
+    }
+
+    [Fact]
+    public async Task ArmedSignOut_IsDisarmedByCancel_Lock_Export_OrRefresh()
+    {
+        var store = new FakeKeyStore { Stored = "x", Active = new SignerDescriptor("ef".PadRight(64, '0'), SignerKind.Nip49Local) };
+        var vm = New(store);
+        await vm.RefreshAsync();
+
+        await vm.SignOutAsync();
+        vm.CancelSignOut();
+        Assert.False(vm.SignOutArmed);
+        Assert.Equal("Sign out cancelled.", vm.Status);
+
+        await vm.SignOutAsync();
+        await vm.ExportAsync("pw".AsMemory());
+        Assert.False(vm.SignOutArmed);
+
+        await vm.SignOutAsync();
+        await vm.RefreshAsync();
+        Assert.False(vm.SignOutArmed);
+
+        await vm.SignOutAsync();
+        await vm.LockAsync();
+        Assert.False(vm.SignOutArmed);
+        Assert.Equal(0, store.SignOuts); // four armings, zero deletions
+    }
+
+    [Fact]
+    public async Task Lock_ReturnsToLocked_WithoutDeleting_AndUnlockWorksAgain()
+    {
+        var store = new FakeKeyStore { Stored = "x", Active = new SignerDescriptor("ef".PadRight(64, '0'), SignerKind.Nip49Local) };
+        var vm = New(store);
+        await vm.RefreshAsync();
+        await vm.ExportAsync("pw".AsMemory());
+
+        await vm.LockAsync();
+
+        Assert.Equal(KeyPanelState.Locked, vm.State);
+        Assert.Null(vm.PubkeyHex);
+        Assert.Null(vm.ExportedKey);
+        Assert.Equal(1, store.Locks);
+        Assert.Equal(0, store.SignOuts);
+        Assert.NotNull(store.Stored); // the file is still there
+
+        await vm.UnlockAsync("pw".AsMemory());
+        Assert.Equal(KeyPanelState.Unlocked, vm.State);
     }
 
     [Fact]
@@ -149,6 +205,7 @@ public class KeyPanelViewModelTests
         public int Unlocks { get; private set; }
         public int Imports { get; private set; }
         public int SignOuts { get; private set; }
+        public int Locks { get; private set; }
         public int PassphraseCalls { get; private set; }
 
         public Task<SignerDescriptor> GetActiveSignerAsync(CancellationToken cancellationToken = default) =>
@@ -197,6 +254,13 @@ public class KeyPanelViewModelTests
             PassphraseCalls++;
             _ = Active ?? throw new SignerUnavailableException("not unlocked");
             return Task.FromResult("ncryptsec1exported");
+        }
+
+        public Task LockAsync(CancellationToken cancellationToken = default)
+        {
+            Locks++;
+            Active = null; // Stored is kept: lock is memory-only
+            return Task.CompletedTask;
         }
 
         public Task SignOutAsync(CancellationToken cancellationToken = default)
