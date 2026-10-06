@@ -35,4 +35,30 @@ public class NativeFileSyncTests
 
         Assert.Throws<IOException>(() => NativeFileSync.SyncToDisk(invalidHandle));
     }
+
+    [Fact]
+    public void SyncDirectoryToDisk_Succeeds_OnARealDirectory()
+    {
+        var path = Directory.CreateTempSubdirectory("nightlydawn-dirfsync-test").FullName;
+        try
+        {
+            // Must not throw.
+            NativeFileSync.SyncDirectoryToDisk(path);
+        }
+        finally
+        {
+            Directory.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void SyncDirectoryToDisk_ThrowsIOException_ForANonexistentPath()
+    {
+        // No fd is ever obtained here — the exception comes from open(2) itself
+        // (ENOENT), not from fsync. This is the directory-fsync counterpart of the bad
+        // file descriptor case above: a failure that must surface, not vanish.
+        var path = Path.Combine(Path.GetTempPath(), $"nightlydawn-dirfsync-missing-{Guid.NewGuid():N}");
+
+        Assert.Throws<IOException>(() => NativeFileSync.SyncDirectoryToDisk(path));
+    }
 }

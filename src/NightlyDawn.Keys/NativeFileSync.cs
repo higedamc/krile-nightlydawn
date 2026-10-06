@@ -56,11 +56,21 @@ internal static class NativeFileSync
         return IntPtr.Zero; // defer to the runtime's default resolution (covers macOS, already verified against a real fsync call)
     }
 
+    private const int ORdOnly = 0; // POSIX-standard; 0 on Linux and macOS alike (unlike F_FullFSync below).
+
     [DllImport("libc", SetLastError = true)]
     private static extern int fsync(int fd);
 
     [DllImport("libc", SetLastError = true)]
     private static extern int fcntl(int fd, int cmd, int arg);
+
+    // 2-arg form: valid because this never passes O_CREAT, whose mode argument is the
+    // only reason open(2) is variadic in the first place.
+    [DllImport("libc", SetLastError = true)]
+    private static extern int open(string pathname, int flags);
+
+    [DllImport("libc", SetLastError = true)]
+    private static extern int close(int fd);
 
     /// <summary>
     /// Blocks until <paramref name="handle"/>'s data (and, on macOS, the drive's own write
@@ -104,6 +114,49 @@ internal static class NativeFileSync
             {
                 handle.DangerousRelease();
             }
+        }
+    }
+
+    /// <summary>
+    /// Fsyncs the directory at <paramref name="directoryPath"/> — needed after a
+    /// <see cref="File.Move(string, string, bool)"/> (<c>rename(2)</c>) into that
+    /// directory, since the directory-entry update is only guaranteed durable once the
+    /// directory itself has reached storage, same as file data is. Unlike
+    /// <see cref="SyncToDisk"/>, this never tries <c>F_FULLFSYNC</c> on macOS: that flag
+    /// exists to flush a drive's write cache for file *data* durability, which has no
+    /// bearing on a directory inode's metadata, and <c>fcntl(F_FULLFSYNC)</c> on a
+    /// directory fd is untested territory this class has no vector constant or man-page
+    /// citation for (unlike the file case above, which cites Apple's own docs). Plain
+    /// <c>fsync</c> on the directory fd is the documented, portable mechanism.
+    /// </summary>
+    /// <exception cref="IOException">The directory could not be opened, or its fsync failed.</exception>
+    public static void SyncDirectoryToDisk(string directoryPath)
+    {
+        var fd = open(directoryPath, ORdOnly);
+        if (fd < 0)
+        {
+            throw new IOException($"Could not open directory '{directoryPath}' for fsync (errno {Marshal.GetLastWin32Error()}).");
+        }
+
+        try
+        {
+            int result;
+            int lastError;
+            do
+            {
+                result = fsync(fd);
+                lastError = Marshal.GetLastWin32Error();
+            }
+            while (result != 0 && lastError == EIntr);
+
+            if (result != 0)
+            {
+                throw new IOException($"Directory fsync failed with errno {lastError}.");
+            }
+        }
+        finally
+        {
+            close(fd);
         }
     }
 
