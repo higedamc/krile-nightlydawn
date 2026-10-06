@@ -57,10 +57,13 @@ command above. Avalonia uses its native macOS backend; nothing else is needed.
    sudo pacman -S dotnet-sdk-8.0
    ```
 
-   or user-local with Microsoft's install script (no root, lands in `~/.dotnet`):
+   or user-local with Microsoft's install script (no root, lands in `~/.dotnet`).
+   Download it to a file, look at it, then run it — do not pipe it into a shell:
 
    ```
-   curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 8.0
+   curl -sSL -o /tmp/dotnet-install.sh https://dot.net/v1/dotnet-install.sh
+   less /tmp/dotnet-install.sh      # inspect; it should only call dotnetcli.azureedge.net / builds.dotnet.microsoft.com
+   bash /tmp/dotnet-install.sh --channel 8.0
    export DOTNET_ROOT="$HOME/.dotnet"
    export PATH="$HOME/.dotnet:$PATH"
    ```
@@ -68,11 +71,12 @@ command above. Avalonia uses its native macOS backend; nothing else is needed.
    Check with `dotnet --version` (8.0.x).
 
 2. Native libraries. Avalonia's Linux backends need `fontconfig`, `libwayland`
-   (Wayland path) and `libx11`, `libice`, `libsm` (X11/XWayland fallback). On
-   Omarchy these are normally already present; if not:
+   and `libxkbcommon` (Wayland path: keyboard layout and IME input) and
+   `libx11`, `libice`, `libsm` (X11/XWayland fallback). On Omarchy these are
+   normally already present; if not:
 
    ```
-   sudo pacman -S --needed fontconfig wayland libx11 libice libsm
+   sudo pacman -S --needed fontconfig wayland libxkbcommon libx11 libice libsm
    ```
 
 3. Run from a Hyprland session:

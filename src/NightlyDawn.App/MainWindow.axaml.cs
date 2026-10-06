@@ -86,33 +86,50 @@ public sealed partial class MainWindow : Window
             $"Window (DIP) : {Bounds.Width:0}x{Bounds.Height:0}");
     }
 
+    // Both handlers are `async void` (event handlers), so an unhandled exception would take the
+    // process down. This window exists to *report* platform failures, so every clipboard error is
+    // caught and shown in the status line instead — the Wayland backend is new upstream code.
     private async void OnCopyClick(object? sender, RoutedEventArgs e)
     {
-        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
-        if (clipboard is null)
+        try
         {
-            _clipboardStatus.Text = "Clipboard: not available on this platform";
-            return;
-        }
+            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+            if (clipboard is null)
+            {
+                _clipboardStatus.Text = "Clipboard: not available on this platform";
+                return;
+            }
 
-        var text = _clipboardProbe.Text ?? string.Empty;
-        await clipboard.SetTextAsync(text);
-        _clipboardStatus.Text = $"Copied {text.Length} chars at {DateTime.Now:HH:mm:ss}";
+            var text = _clipboardProbe.Text ?? string.Empty;
+            await clipboard.SetTextAsync(text);
+            _clipboardStatus.Text = $"Copied {text.Length} chars at {DateTime.Now:HH:mm:ss}";
+        }
+        catch (Exception ex)
+        {
+            _clipboardStatus.Text = $"Copy failed — {ex.GetType().Name}: {ex.Message}";
+        }
     }
 
     private async void OnPasteClick(object? sender, RoutedEventArgs e)
     {
-        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
-        if (clipboard is null)
+        try
         {
-            _clipboardStatus.Text = "Clipboard: not available on this platform";
-            return;
-        }
+            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+            if (clipboard is null)
+            {
+                _clipboardStatus.Text = "Clipboard: not available on this platform";
+                return;
+            }
 
-        var text = await clipboard.TryGetTextAsync();
-        _clipboardProbe.Text = text ?? string.Empty;
-        _clipboardStatus.Text = text is null
-            ? "Pasted: clipboard has no text"
-            : $"Pasted {text.Length} chars at {DateTime.Now:HH:mm:ss}";
+            var text = await clipboard.TryGetTextAsync();
+            _clipboardProbe.Text = text ?? string.Empty;
+            _clipboardStatus.Text = text is null
+                ? "Pasted: clipboard has no text"
+                : $"Pasted {text.Length} chars at {DateTime.Now:HH:mm:ss}";
+        }
+        catch (Exception ex)
+        {
+            _clipboardStatus.Text = $"Paste failed — {ex.GetType().Name}: {ex.Message}";
+        }
     }
 }
