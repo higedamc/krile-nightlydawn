@@ -4,7 +4,30 @@
     <OutputType>Exe</OutputType>
     <AssemblyName>NightlyDawn.App</AssemblyName>
     <RootNamespace>NightlyDawn.App</RootNamespace>
+    <!-- Avalonia: compiled XAML bindings by default; no icon yet (plan D3: new branding, not krile.ico). -->
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <!-- Avalonia 12 ships Roslyn 4.14 analyzers/generators; the .NET 8 SDK (Roslyn 4.11) cannot load them (CS9057).
+         Excluding analyzer assets keeps the .NET 8 toolchain; named controls are resolved with FindControl in code-behind. -->
+    <AvaloniaNameGeneratorIsEnabled>false</AvaloniaNameGeneratorIsEnabled>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.3" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.3" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.3" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.3" />
+    <!-- Native Wayland backend for Omarchy/Hyprland; falls back to X11 (XWayland) when WAYLAND_DISPLAY is absent. -->
+    <PackageReference Include="Avalonia.Wayland" Version="12.1.3" />
+  </ItemGroup>
+
+  <!-- Avalonia 12 ships Roslyn 4.14 analyzers/generators; the .NET 8 SDK compiler (Roslyn 4.11) refuses to load
+       them (CS9057). Drop them from the compile; they only provide diagnostics and x:Name field generation, and
+       this project resolves named controls with FindControl. Remove this target once the build moves to a newer SDK. -->
+  <Target Name="RemoveAvaloniaRoslynAnalyzers" BeforeTargets="CoreCompile">
+    <ItemGroup>
+      <Analyzer Remove="@(Analyzer)" Condition="$([System.String]::Copy('%(Analyzer.Identity)').Contains('/avalonia/'))" />
+    </ItemGroup>
+  </Target>
 
   <ItemGroup>
     <ProjectReference Include="..\NightlyDawn.Core\NightlyDawn.Core.csproj" />
