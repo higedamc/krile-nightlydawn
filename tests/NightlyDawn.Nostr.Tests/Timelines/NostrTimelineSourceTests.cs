@@ -69,10 +69,47 @@ public class NostrTimelineSourceTests
         Assert.Equal(["shared", "only on slow", "live"], notes.Select(n => n.Content)); // `shared` once, although two relays sent it
         Assert.IsType<InitialLoadComplete>(updates[2]); // after both backlog notes, before the live one
         Assert.True(loadedAfter >= TimeSpan.FromMilliseconds(350), $"InitialLoadComplete came after {loadedAfter?.TotalMilliseconds}ms: first-EOSE-wins, not every relay");
-        // Both relays delivered `shared`; whichever receive loop reached the channel first owns the slot, so only the shape is deterministic.
-        var seenOn = Assert.Single(notes[0].SeenOnRelays!);
-        Assert.Contains(seenOn, new[] { "wss://fast.example/", "wss://slow.example/" });
-        Assert.Equal(["wss://slow.example/"], notes[1].SeenOnRelays);
+        // Both relays delivered `shared`; whichever receive loop reached the channel first is recorded, so only the shape is deterministic.
+        Assert.NotNull(notes[0].FirstSeenOnRelay);
+        Assert.Contains(notes[0].FirstSeenOnRelay, new[] { fast.Url, slow.Url });
+        Assert.Equal(slow.Url, notes[1].FirstSeenOnRelay);
+    }
+
+    [Fact]
+    public async Task Stream_RemembersOnlyTheConfiguredNumberOfIds_AndRedeliveryAfterEvictionShowsOnceMore()
+    {
+        var options = new NostrBackendOptions { FetchTimeout = TimeSpan.FromSeconds(5), MaxRememberedEventIdsPerTimeline = 2 };
+        var (factory, relays, _) = NewFactory(["wss://r.example"], options: options);
+        await using var _ = factory;
+        var relay = Relay(relays, "wss://r.example");
+        var first = Signer.Sign(1, "first", createdAt: 1);
+        var second = Signer.Sign(1, "second", createdAt: 2);
+        var third = Signer.Sign(1, "third", createdAt: 3);
+        relay.StoredEvents.AddRange([first, second, third]);
+
+        using var cts = new CancellationTokenSource(TestTimeout);
+        var contents = new List<string>();
+        await foreach (var update in factory.CreateAnonymous(Kind1).StreamAsync(cts.Token))
+        {
+            if (update is NoteArrived n)
+            {
+                contents.Add(n.Note.Content);
+            }
+
+            if (update is InitialLoadComplete)
+            {
+                var sub = SubscriptionIdOf(relay);
+                relay.PushEvent(sub, third);  // still remembered -> dropped
+                relay.PushEvent(sub, first);  // evicted (capacity 2 kept second+third) -> shown once more, by design
+            }
+
+            if (contents.Count == 4)
+            {
+                break;
+            }
+        }
+
+        Assert.Equal(["first", "second", "third", "first"], contents);
     }
 
     [Fact]

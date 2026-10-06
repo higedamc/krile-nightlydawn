@@ -17,4 +17,7 @@ public static class AppServices
 
     /// <summary>When set, the main window renders itself to this PNG path once laid out and then exits (spike diagnostics). The host reads <c>NIGHTLYDAWN_SCREENSHOT</c> and puts it here.</summary>
     public static string? ScreenshotPath { get; set; }
+
+    /// <summary>The key store the host constructed (Core's <see cref="IKeyStore"/>; the App never references <c>NightlyDawn.Keys</c>). Null when the host could not create a data directory; only the Keys panel consumes this, never the timeline.</summary>
+    public static IKeyStore? KeyStore { get; set; }
 }

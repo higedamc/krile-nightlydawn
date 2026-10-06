@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!-- Composition root (plan Phase 4 / leaf 1f). This is the one project allowed to know every layer:
-       it references the App (views), the Nostr adapter and, once merged, the key store, and wires them
+       it references the App (views), the Nostr adapter and the key store, and wires them
        together in Program.cs. NightlyDawn.App itself stays free of infrastructure references (B9), which
        tests/NightlyDawn.App.Tests/ArchitectureTests.cs enforces. There is deliberately no such guard here. -->
   <PropertyGroup>
@@ -29,6 +29,7 @@
     <ProjectReference Include="..\NightlyDawn.App\NightlyDawn.App.csproj" />
     <ProjectReference Include="..\NightlyDawn.Core\NightlyDawn.Core.csproj" />
     <ProjectReference Include="..\NightlyDawn.Nostr\NightlyDawn.Nostr.csproj" />
+    <ProjectReference Include="..\NightlyDawn.Keys\NightlyDawn.Keys.csproj" />
   </ItemGroup>
 
   <ItemGroup>

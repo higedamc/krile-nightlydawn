@@ -31,7 +31,7 @@ public sealed record NostrFilter(
     int? Limit = null,
     string? Search = null);
 
-/// <summary>A relay URL restricted to <c>wss://</c> unless the caller opts into <c>ws://</c> for local development (plan §5 security requirement, S3). <see cref="Parse"/> is the only way to construct one — this is a <c>sealed record</c> (reference type), not a struct, so there is no public parameterless constructor to bypass validation via <c>default</c>/<c>new RelayUrl[n]</c> (B12). <see cref="Value"/> is <see cref="Uri.AbsoluteUri"/>, not the caller's raw string: it has no incidental surrounding whitespace, and two inputs that denote the same relay (e.g. differing only in a trailing slash or scheme case) produce the same <see cref="RelayUrl"/>, which B6's "EOSE from every connected relay" and B7's <see cref="Note.SeenOnRelays"/> both rely on (B14).</summary>
+/// <summary>A relay URL restricted to <c>wss://</c> unless the caller opts into <c>ws://</c> for local development (plan §5 security requirement, S3). <see cref="Parse"/> is the only way to construct one — this is a <c>sealed record</c> (reference type), not a struct, so there is no public parameterless constructor to bypass validation via <c>default</c>/<c>new RelayUrl[n]</c> (B12). <see cref="Value"/> is <see cref="Uri.AbsoluteUri"/>, not the caller's raw string: it has no incidental surrounding whitespace, and two inputs that denote the same relay (e.g. differing only in a trailing slash or scheme case) produce the same <see cref="RelayUrl"/>, which B6's "EOSE from every connected relay" and B7's <see cref="Note.FirstSeenOnRelay"/> both rely on (B14).</summary>
 public sealed record RelayUrl
 {
     public string Value { get; }
@@ -120,7 +120,8 @@ public enum NoteKind
     GenericRepost = 16,
 }
 
-/// <summary>Domain-mapped kind:1/6/16 event (plan §4: Status, Retweet/Quote, Reply). <see cref="Tags"/> keeps the raw tags so KQL's <c>tags.t</c>/<c>relay</c> fields (plan §4) stay expressible (B7).</summary>
+/// <summary>Domain-mapped kind:1/6/16 event (plan §4: Status, Retweet/Quote, Reply). <see cref="Tags"/> keeps the raw tags so KQL's <c>tags.t</c> field (plan §4) stays expressible (B7).
+/// <para><see cref="FirstSeenOnRelay"/> is the relay that delivered the event <em>first</em>; later deliveries of the same id from other relays are deduplicated before a <see cref="Note"/> exists, so there is deliberately no list here. Consequently KQL's <c>relay</c> is a <em>source</em> (<c>relay(wss://…)</c> = read from that one relay), not a <c>where</c> field (decided 2026-10-07; accumulate per-relay sightings via a dedicated <see cref="TimelineUpdate"/> if a consumer ever needs it).</para></summary>
 public sealed record Note(
     string Id,
     string AuthorPubkey,
@@ -134,7 +135,7 @@ public sealed record Note(
     string? RepostedNoteId = null,
     IReadOnlyList<string>? MentionedPubkeys = null,
     IReadOnlyList<string>? Hashtags = null,
-    IReadOnlyList<string>? SeenOnRelays = null);
+    RelayUrl? FirstSeenOnRelay = null);
 
 public abstract record TimelineUpdate;
 
