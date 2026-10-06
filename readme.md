@@ -34,14 +34,40 @@ dotnet test NightlyDawn.sln
 
 Requires the .NET 8 SDK (see `global.json`).
 
-## Running the app shell
+## Running the app
 
-The app is a minimal Avalonia shell for now (a window with a platform check
-panel). It opens with:
+> **Changed (leaf 1f):** the executable is now `src/NightlyDawn.Host`, not
+> `src/NightlyDawn.App`. If you were told to run `dotnet run --project src/NightlyDawn.App`,
+> use the command below instead; the App project is a library and no longer starts.
 
 ```
-dotnet run --project src/NightlyDawn.App
+dotnet run --project src/NightlyDawn.Host
 ```
+
+The window shows one timeline column. Type a query, press Subscribe (or Enter),
+and public notes from the configured relays stream in; the loading bar clears
+once every connected relay has delivered its stored events.
+
+Query syntax (minimal, until the KQL compiler lands in leaf 1c):
+
+| Token | Meaning | Example |
+|---|---|---|
+| `kind:N` / `kinds:1,6` | event kinds (default `1`) | `kind:1` |
+| `author:<hex>` / `authors:a,b` | author pubkeys as 64-char hex (npub later) | `author:3bf0c63f…` |
+| `#tag` / `t:tag` / `tags:a,b` | `#t` hashtag filter, case-insensitive | `#nostr` |
+| `limit:N` | relay-side limit (default 50, max 500) | `limit:100` |
+
+An empty query means `kind:1 limit:50`. `from …` (KQL) is rejected with a hint
+until 1c. Tokens are space-separated, e.g. `kinds:1,6 #bitcoin limit:100`.
+
+Relays: by default `wss://relay.damus.io` and `wss://nos.lol`. Override with a
+comma-separated `wss://` list; plaintext `ws://` is refused before any socket opens:
+
+```
+NIGHTLYDAWN_RELAYS="wss://relay.damus.io,wss://nos.lol,wss://relay.nostr.band" dotnet run --project src/NightlyDawn.Host
+```
+
+Reading needs no key. Key generation / signing (leaf 1b) is wired separately.
 
 ### macOS
 
@@ -82,16 +108,16 @@ command above. Avalonia uses its native macOS backend; nothing else is needed.
 3. Run from a Hyprland session:
 
    ```
-   dotnet run --project src/NightlyDawn.App
+   dotnet run --project src/NightlyDawn.Host
    ```
 
-   The shell picks the **native Wayland backend** when `WAYLAND_DISPLAY` is set
+   The host picks the **native Wayland backend** when `WAYLAND_DISPLAY` is set
    (Hyprland sets it) and falls back to X11 through XWayland otherwise. To
    compare both paths for the spike:
 
    ```
-   NIGHTLYDAWN_BACKEND=wayland dotnet run --project src/NightlyDawn.App   # force Wayland
-   NIGHTLYDAWN_BACKEND=x11     dotnet run --project src/NightlyDawn.App   # force X11 / XWayland
+   NIGHTLYDAWN_BACKEND=wayland dotnet run --project src/NightlyDawn.Host   # force Wayland
+   NIGHTLYDAWN_BACKEND=x11     dotnet run --project src/NightlyDawn.Host   # force X11 / XWayland
    ```
 
    The X11 path requires XWayland to be enabled in Hyprland (`xwayland { enabled = true }`,
@@ -108,7 +134,7 @@ command above. Avalonia uses its native macOS backend; nothing else is needed.
      set the scale explicitly:
 
      ```
-     AVALONIA_GLOBAL_SCALE_FACTOR=2 NIGHTLYDAWN_BACKEND=x11 dotnet run --project src/NightlyDawn.App
+     AVALONIA_GLOBAL_SCALE_FACTOR=2 NIGHTLYDAWN_BACKEND=x11 dotnet run --project src/NightlyDawn.Host
      ```
 
      (per-screen: `AVALONIA_SCREEN_SCALE_FACTORS="eDP-1=2;DP-1=1.5"`). Hyprland's
@@ -125,8 +151,8 @@ command above. Avalonia uses its native macOS backend; nothing else is needed.
    can render itself to a PNG and exit:
 
    ```
-   NIGHTLYDAWN_SCREENSHOT=/tmp/nightlydawn-wayland.png NIGHTLYDAWN_BACKEND=wayland dotnet run --project src/NightlyDawn.App
-   NIGHTLYDAWN_SCREENSHOT=/tmp/nightlydawn-x11.png     NIGHTLYDAWN_BACKEND=x11     dotnet run --project src/NightlyDawn.App
+   NIGHTLYDAWN_SCREENSHOT=/tmp/nightlydawn-wayland.png NIGHTLYDAWN_BACKEND=wayland dotnet run --project src/NightlyDawn.Host
+   NIGHTLYDAWN_SCREENSHOT=/tmp/nightlydawn-x11.png     NIGHTLYDAWN_BACKEND=x11     dotnet run --project src/NightlyDawn.Host
    ```
 
 ## License

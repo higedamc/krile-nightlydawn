@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Composition root (plan Phase 4 / leaf 1f). This is the one project allowed to know every layer:
+       it references the App (views), the Nostr adapter and, once merged, the key store, and wires them
+       together in Program.cs. NightlyDawn.App itself stays free of infrastructure references (B9), which
+       tests/NightlyDawn.App.Tests/ArchitectureTests.cs enforces. There is deliberately no such guard here. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>NightlyDawn.Host</AssemblyName>
+    <RootNamespace>NightlyDawn.Host</RootNamespace>
+    <!-- Avalonia 12's Roslyn 4.14 analyzers vs the .NET 8 SDK (CS9057): same workaround as the App project. -->
+    <AvaloniaNameGeneratorIsEnabled>false</AvaloniaNameGeneratorIsEnabled>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.3" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.3" />
+    <!-- Native Wayland backend for Omarchy/Hyprland; falls back to X11 (XWayland) when WAYLAND_DISPLAY is absent. -->
+    <PackageReference Include="Avalonia.Wayland" Version="12.1.3" />
+  </ItemGroup>
+
+  <Target Name="RemoveAvaloniaRoslynAnalyzers" BeforeTargets="CoreCompile">
+    <ItemGroup>
+      <Analyzer Remove="@(Analyzer)" Condition="$([System.String]::Copy('%(Analyzer.Identity)').Contains('/avalonia/'))" />
+    </ItemGroup>
+  </Target>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NightlyDawn.App\NightlyDawn.App.csproj" />
+    <ProjectReference Include="..\NightlyDawn.Core\NightlyDawn.Core.csproj" />
+    <ProjectReference Include="..\NightlyDawn.Nostr\NightlyDawn.Nostr.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="NightlyDawn.Host.Tests" />
+  </ItemGroup>
+
+</Project>
