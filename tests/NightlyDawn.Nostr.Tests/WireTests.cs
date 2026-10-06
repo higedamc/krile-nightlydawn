@@ -20,6 +20,31 @@ public class WireTests
     }
 
     [Fact]
+    public void CanonicalSerialization_RejectsLoneSurrogates_AndVerifierReportsMalformed()
+    {
+        var lone = "bad \uD800 text";
+        Assert.Throws<ArgumentException>(() => NostrJson.CanonicalEventBytes("ab", 1, 1, [], lone));
+        Assert.Throws<ArgumentException>(() => NostrJson.CanonicalEventBytes("ab", 1, 1, [["t", "\uDC00"]], "ok"));
+
+        var signer = new TestSigner();
+        var e = signer.Sign(1, "fine") with { Content = lone };
+        Assert.Equal(VerificationResult.MalformedFields, EventVerifier.Verify(e));
+
+        // A proper surrogate pair (astral plane) is fine and kept verbatim.
+        var astral = "emoji \U0001F41D here";
+        var json = System.Text.Encoding.UTF8.GetString(NostrJson.CanonicalEventBytes("ab", 1, 1, [], astral));
+        Assert.Contains(astral, json);
+    }
+
+    [Fact]
+    public void ParseRelayMessage_ReturnsNull_ForLoneSurrogateStrings()
+    {
+        Assert.Null(NostrJson.ParseRelayMessage("[\"EVENT\",\"s\",{\"id\":\"ab\",\"pubkey\":\"cd\",\"created_at\":1,\"kind\":1,\"tags\":[],\"content\":\"\\uD800\",\"sig\":\"ef\"}]"));
+        Assert.Null(NostrJson.ParseRelayMessage("[\"NOTICE\",\"\\uDFFF\"]"));
+        Assert.Null(NostrJson.ParseRelayMessage("[\"OK\",\"\\uD800\",true,\"\"]"));
+    }
+
+    [Fact]
     public void Verifier_AcceptsEventSignedWithTestKey_AndRejectsTampering()
     {
         var signer = new TestSigner();

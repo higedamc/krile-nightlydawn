@@ -105,8 +105,9 @@ public class EventMapperTests
         var list = Mapper.ToRelayList(e);
 
         Assert.Equal(Signer.PubkeyHex, list.Pubkey);
-        Assert.Equal(["wss://both.example", "wss://read.example"], list.ReadRelays.Select(r => r.Value));
-        Assert.Equal(["wss://both.example", "wss://write.example"], list.WriteRelays.Select(r => r.Value));
+        // RelayUrl normalizes to Uri.AbsoluteUri (trailing slash), so "wss://write.example/" and "wss://both.example" compare canonically.
+        Assert.Equal(["wss://both.example/", "wss://read.example/"], list.ReadRelays.Select(r => r.Value));
+        Assert.Equal(["wss://both.example/", "wss://write.example/"], list.WriteRelays.Select(r => r.Value));
 
         Assert.Throws<EventMappingException>(() => Mapper.ToRelayList(Signer.Sign(3, "")));
     }

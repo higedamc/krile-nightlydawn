@@ -227,6 +227,54 @@ public class NostrBackendTests
         Assert.Equal("blocked: a", ex.Result.Outcomes.Single().Reason);
     }
 
+    [Fact]
+    public async Task PoisonMessage_CostsOneMessage_NotTheConnection()
+    {
+        var (backend, factory) = NewBackend();
+        var relay = factory.Add("wss://poison.example");
+        var good = Signer.Sign(1, "still alive");
+        await backend.ConnectAsync([relay.Url]);
+
+        var received = new List<SubscriptionMessage>();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await foreach (var message in backend.SubscribeAsync(new NostrFilter(Kinds: [1]), cts.Token))
+        {
+            received.Add(message);
+            if (message is EndOfStoredEvents)
+            {
+                var req = relay.Received.First(m => m.StartsWith("[\"REQ\"", StringComparison.Ordinal));
+                var subId = System.Text.Json.JsonDocument.Parse(req).RootElement[1].GetString()!;
+                // Lone high surrogate: JsonDocument.Parse accepts it, GetString() throws InvalidOperationException.
+                relay.Push("[\"EVENT\",\"" + subId + "\",{\"id\":\"ab\",\"pubkey\":\"cd\",\"created_at\":1,\"kind\":1,\"tags\":[],\"content\":\"\\uD800\",\"sig\":\"ef\"}]");
+                relay.Push("[\"NOTICE\",\"\\uD800\"]");
+                relay.PushEvent(subId, good);
+            }
+
+            if (message is EventReceived)
+            {
+                break;
+            }
+        }
+
+        // Negative control: without the per-message try/catch in the receive loop the poison event tears the
+        // connection down (ConnectAttempts becomes 2 after the reconnect) and the counter stays at 0.
+        Assert.Equal(good.Id, received.OfType<EventReceived>().Single().Event.Id);
+        Assert.Equal(2, backend.Diagnostics.MalformedMessages);
+        Assert.Equal(1, relay.ConnectAttempts);
+        Assert.Single(backend.ConnectedRelays);
+    }
+
+    [Fact]
+    public async Task Publish_WithNoConnectedRelays_IsAConnectivityFailure_NotARejection()
+    {
+        var (backend, factory) = NewBackend();
+        factory.Add("wss://down.example").FailConnect = true;
+        await Assert.ThrowsAsync<RelayConnectionException>(() => backend.ConnectAsync([RelayUrl.Parse("wss://down.example")]));
+
+        // Negative control: without the guard this surfaces as EventPublishException("No relay accepted"), i.e. offline reads as rejected.
+        await Assert.ThrowsAsync<RelayConnectionException>(() => backend.PublishAsync(Signer.Sign(1, "offline")));
+    }
+
     private static async Task WaitUntilAsync(Func<bool> condition, int timeoutMs = 3000)
     {
         var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);

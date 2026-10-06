@@ -195,7 +195,17 @@ internal sealed class RelayClient : IAsyncDisposable
                     break;
                 }
 
-                Dispatch(message);
+                // One bad message must cost exactly one message, never the connection: a relay could otherwise
+                // replay the same poison event after every reconnect and keep this client in a reconnect loop.
+                try
+                {
+                    Dispatch(message);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    _diagnostics.CountMalformedMessage();
+                    _logger.LogDebug("Relay {Relay}: message ({Length} bytes) dropped — {Error}", Url.Value, message.Length, ex.GetType().Name);
+                }
             }
         }
         catch (RelayMessageTooLargeException)

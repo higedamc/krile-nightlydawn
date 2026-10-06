@@ -189,6 +189,12 @@ public sealed class NostrBackend : INostrBackend, IAsyncDisposable
     public async Task<PublishResult> PublishAsync(NostrEvent signedEvent, CancellationToken cancellationToken = default)
     {
         var connected = _relays.Values.Where(r => r.IsConnected).ToList();
+        if (connected.Count == 0)
+        {
+            // Offline is not "rejected by every relay" (B5's mirror image): report it as a connectivity failure.
+            throw new RelayConnectionException("(pool)", "No connected relays to publish to");
+        }
+
         var outcomes = await Task.WhenAll(connected.Select(r => r.PublishAsync(signedEvent, cancellationToken))).ConfigureAwait(false);
         var result = new PublishResult(outcomes);
         if (!result.AnyAccepted)

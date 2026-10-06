@@ -53,11 +53,30 @@ internal static class NostrJson
         return Encoding.UTF8.GetBytes(sb.ToString());
     }
 
+    /// <exception cref="ArgumentException">The string contains a lone UTF-16 surrogate; it has no UTF-8 form, so no canonical bytes exist for it.</exception>
     private static void AppendCanonicalString(StringBuilder sb, string value)
     {
         sb.Append('"');
-        foreach (var c in value)
+        for (var i = 0; i < value.Length; i++)
         {
+            var c = value[i];
+            if (char.IsHighSurrogate(c))
+            {
+                if (i + 1 < value.Length && char.IsLowSurrogate(value[i + 1]))
+                {
+                    sb.Append(c).Append(value[i + 1]);
+                    i++;
+                    continue;
+                }
+
+                throw new ArgumentException("String contains a lone high surrogate; it cannot be serialized to UTF-8", nameof(value));
+            }
+
+            if (char.IsLowSurrogate(c))
+            {
+                throw new ArgumentException("String contains a lone low surrogate; it cannot be serialized to UTF-8", nameof(value));
+            }
+
             switch (c)
             {
                 case '\n': sb.Append("\\n"); break;
@@ -254,6 +273,12 @@ internal static class NostrJson
         }
         catch (JsonException)
         {
+            return null;
+        }
+        catch (InvalidOperationException)
+        {
+            // JsonDocument.Parse accepts a lone UTF-16 surrogate escape such as "\uD800"; GetString() then throws
+            // InvalidOperationException. Treat it like any other malformed message instead of letting it escape.
             return null;
         }
     }

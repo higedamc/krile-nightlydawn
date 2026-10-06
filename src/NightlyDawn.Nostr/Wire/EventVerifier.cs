@@ -26,7 +26,16 @@ internal static class EventVerifier
             return VerificationResult.MalformedFields;
         }
 
-        var canonical = NostrJson.CanonicalEventBytes(e.Pubkey, e.CreatedAt, e.Kind, e.Tags, e.Content);
+        byte[] canonical;
+        try
+        {
+            canonical = NostrJson.CanonicalEventBytes(e.Pubkey, e.CreatedAt, e.Kind, e.Tags, e.Content);
+        }
+        catch (ArgumentException)
+        {
+            return VerificationResult.MalformedFields; // lone surrogate: no canonical form exists
+        }
+
         Span<byte> digest = stackalloc byte[32];
         Sha256.HashData(canonical, digest);
         var idBytes = Convert.FromHexString(e.Id);

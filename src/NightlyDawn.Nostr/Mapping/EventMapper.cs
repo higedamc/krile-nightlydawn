@@ -153,12 +153,8 @@ public sealed class EventMapper(NostrBackendDiagnostics? diagnostics = null, ILo
             RelayUrl url;
             try
             {
-                if (!Uri.TryCreate(tag[1], UriKind.Absolute, out var uri) || uri.Scheme != "wss" || string.IsNullOrEmpty(uri.Host))
-                {
-                    continue; // ws:// and junk entries are dropped, not fatal
-                }
-
-                url = RelayUrl.Parse(uri.ToString().TrimEnd('/'));
+                // RelayUrl.Parse enforces wss://, validates with Uri and normalizes (B12/B14); ws:// and junk are dropped, not fatal.
+                url = RelayUrl.Parse(tag[1]);
             }
             catch (ArgumentException)
             {
