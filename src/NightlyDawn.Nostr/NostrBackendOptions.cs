@@ -40,6 +40,7 @@ public sealed class NostrBackendDiagnostics
     private long _oversizeMessages;
     private long _droppedBufferedMessages;
     private long _mappingFailures;
+    private long _dispatchFaults;
 
     public long InvalidId => Interlocked.Read(ref _invalidId);
     public long InvalidSignature => Interlocked.Read(ref _invalidSignature);
@@ -48,10 +49,14 @@ public sealed class NostrBackendDiagnostics
     public long DroppedBufferedMessages => Interlocked.Read(ref _droppedBufferedMessages);
     public long MappingFailures => Interlocked.Read(ref _mappingFailures);
 
+    /// <summary>Exceptions that escaped the per-message dispatch — i.e. <em>our</em> bugs, not relay garbage. Expected to stay at zero; a non-zero value means a defect, so it is kept apart from <see cref="MalformedMessages"/>, which is normally non-zero on a hostile relay.</summary>
+    public long DispatchFaults => Interlocked.Read(ref _dispatchFaults);
+
     internal void CountInvalidId() => Interlocked.Increment(ref _invalidId);
     internal void CountInvalidSignature() => Interlocked.Increment(ref _invalidSignature);
     internal void CountMalformedMessage() => Interlocked.Increment(ref _malformedMessages);
     internal void CountOversizeMessage() => Interlocked.Increment(ref _oversizeMessages);
     internal void CountDroppedBufferedMessage() => Interlocked.Increment(ref _droppedBufferedMessages);
     internal void CountMappingFailure() => Interlocked.Increment(ref _mappingFailures);
+    internal void CountDispatchFault() => Interlocked.Increment(ref _dispatchFaults);
 }

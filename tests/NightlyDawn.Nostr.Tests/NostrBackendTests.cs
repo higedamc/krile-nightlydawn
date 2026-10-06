@@ -260,6 +260,7 @@ public class NostrBackendTests
         // connection down (ConnectAttempts becomes 2 after the reconnect) and the counter stays at 0.
         Assert.Equal(good.Id, received.OfType<EventReceived>().Single().Event.Id);
         Assert.Equal(2, backend.Diagnostics.MalformedMessages);
+        Assert.Equal(0, backend.Diagnostics.DispatchFaults); // relay garbage is not a fault of ours
         Assert.Equal(1, relay.ConnectAttempts);
         Assert.Single(backend.ConnectedRelays);
     }

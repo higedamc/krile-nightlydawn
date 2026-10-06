@@ -203,8 +203,11 @@ internal sealed class RelayClient : IAsyncDisposable
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    _diagnostics.CountMalformedMessage();
-                    _logger.LogDebug("Relay {Relay}: message ({Length} bytes) dropped — {Error}", Url.Value, message.Length, ex.GetType().Name);
+                    // Parse-level garbage is already counted as malformed inside Dispatch; anything that gets here is
+                    // a defect in our own handling. Keep it in its own counter so it cannot hide inside a metric that
+                    // is normally non-zero on a hostile relay.
+                    _diagnostics.CountDispatchFault();
+                    _logger.LogWarning("Relay {Relay}: dispatch fault on a {Length}-byte message — {Error}", Url.Value, message.Length, ex.GetType().Name);
                 }
             }
         }
