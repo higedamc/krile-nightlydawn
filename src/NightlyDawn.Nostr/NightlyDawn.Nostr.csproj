@@ -6,7 +6,17 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- BIP-340 Schnorr verification (MIT, no dependencies, netstandard2.1). Pure managed; see PR for selection notes. -->
+    <PackageReference Include="NBitcoin.Secp256k1" Version="4.0.3" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\NightlyDawn.Core\NightlyDawn.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="NightlyDawn.Nostr.Tests" />
   </ItemGroup>
 
 </Project>

@@ -9,6 +9,8 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <!-- Test-only: signs fixture events with a throwaway key so the verifier has something real to check. -->
+    <PackageReference Include="NBitcoin.Secp256k1" Version="4.0.3" />
   </ItemGroup>
 
   <ItemGroup>
