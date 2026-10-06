@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>NightlyDawn.Nostr</AssemblyName>
+    <RootNamespace>NightlyDawn.Nostr</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NightlyDawn.Core\NightlyDawn.Core.csproj" />
+  </ItemGroup>
+
+</Project>

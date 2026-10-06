@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>NightlyDawn.App</AssemblyName>
+    <RootNamespace>NightlyDawn.App</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NightlyDawn.Core\NightlyDawn.Core.csproj" />
+    <ProjectReference Include="..\NightlyDawn.Nostr\NightlyDawn.Nostr.csproj" />
+    <ProjectReference Include="..\NightlyDawn.Filters\NightlyDawn.Filters.csproj" />
+    <ProjectReference Include="..\NightlyDawn.Storage\NightlyDawn.Storage.csproj" />
+  </ItemGroup>
+
+</Project>
