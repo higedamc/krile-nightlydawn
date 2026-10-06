@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>NightlyDawn.Filters</AssemblyName>
+    <RootNamespace>NightlyDawn.Filters</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NightlyDawn.Core\NightlyDawn.Core.csproj" />
+  </ItemGroup>
+
+</Project>
