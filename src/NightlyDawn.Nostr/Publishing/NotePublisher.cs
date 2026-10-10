@@ -33,12 +33,16 @@ public sealed class NotePublisher(
     /// long-text exemption only covers kind 30023/30024/30040/30041), so that CJK body would be signed,
     /// broadcast, and rejected by every relay with <c>content is too large</c> — an
     /// <see cref="EventPublishException"/> thrown <em>after</em> the sign step, for a body that looked
-    /// well under the old 65,536-char cap. This value is <c>131,072</c> minus a 4,096-byte envelope reserve:
-    /// id/pubkey/sig/created_at/kind/content's own JSON punctuation is ~342 bytes with no tags, and the
-    /// richest tag shape this publisher builds — <see cref="NoteEventBuilder.Reply"/> with a root+reply
-    /// e-tag pair and ten mentioned-author p-tags — measures ~1,353 bytes; 4,096 leaves roughly 3x that
-    /// headroom. Exceeding it throws rather than truncates — silently changing what the user typed, or
-    /// cutting a UTF-8 sequence mid-rune, is worse than refusing to send it.</summary>
+    /// well under the old 65,536-char cap. This value was picked to sit relatively close to our own relays'
+    /// limit, not derived by subtracting an envelope estimate from it: the signed-envelope overhead this
+    /// publisher actually produces is ~342 bytes for a tagless event and ~1,353 bytes for the richest tag
+    /// shape it builds — <see cref="NoteEventBuilder.Reply"/> with a root+reply e-tag pair and ten
+    /// mentioned-author p-tags — both far under the slack this cap leaves. It does not guarantee acceptance:
+    /// relays measure the signed event's full <c>len(event.MarshalJSON())</c>, not <see cref="Note.Content"/>'s
+    /// byte count on its own, and relays besides our own two enforce different limits — strfry's own
+    /// <c>maxEventSize</c> default is 65,536, about half this value. Exceeding it throws rather than
+    /// truncates — silently changing what the user typed, or cutting a UTF-8 sequence mid-rune, is worse
+    /// than refusing to send it.</summary>
     public const int MaxContentBytes = 131_072 - 4_096;
 
     /// <summary>Named cap on <see cref="ReactAsync"/>'s <c>content</c> (plan §9.3). NIP-25 reactions are
