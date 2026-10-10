@@ -59,40 +59,40 @@ internal static class KqlCompiler
             case FilterSourceKind.List:
                 throw new UnsupportedFilterFieldException("from list");
             case FilterSourceKind.User:
-            {
-                var hex = ResolvePubkeyHex(ast.Source.Argument!);
-                authors.Add(hex);
-                sourcePredicate = note => note.AuthorPubkey == hex;
-                break;
-            }
+                {
+                    var hex = ResolvePubkeyHex(ast.Source.Argument!);
+                    authors.Add(hex);
+                    sourcePredicate = note => note.AuthorPubkey == hex;
+                    break;
+                }
 
             case FilterSourceKind.Kind:
-            {
-                var kind = ParseKind(ast.Source.Argument!);
-                kinds.Add(kind);
-                sourcePredicate = note => (int)note.Kind == kind;
-                break;
-            }
+                {
+                    var kind = ParseKind(ast.Source.Argument!);
+                    kinds.Add(kind);
+                    sourcePredicate = note => (int)note.Kind == kind;
+                    break;
+                }
 
             case FilterSourceKind.Search:
-            {
-                // NostrFilter.Search (NIP-50) is never emitted: not every relay implements it, and relays that
-                // do may stem/fuzzy-match, which is narrower than our own Contains — unsound either way
-                // (plan §7.2). `from search(...)` is instead exactly a local `text contains "..."` predicate.
-                var term = ast.Source.Argument!;
-                sourcePredicate = note => note.Content.Contains(term, StringComparison.Ordinal);
-                break;
-            }
+                {
+                    // NostrFilter.Search (NIP-50) is never emitted: not every relay implements it, and relays that
+                    // do may stem/fuzzy-match, which is narrower than our own Contains — unsound either way
+                    // (plan §7.2). `from search(...)` is instead exactly a local `text contains "..."` predicate.
+                    var term = ast.Source.Argument!;
+                    sourcePredicate = note => note.Content.Contains(term, StringComparison.Ordinal);
+                    break;
+                }
 
             case FilterSourceKind.Relay:
-            {
-                // No NostrFilter field corresponds to "which relay delivered this" — it is a subscription-level
-                // choice, not a per-event server-side filter — so this is a local predicate against the one
-                // relay Note.FirstSeenOnRelay actually records (plan §7.2).
-                var relayUrl = ParseRelayArgument(ast.Source.Argument!);
-                sourcePredicate = note => note.FirstSeenOnRelay == relayUrl;
-                break;
-            }
+                {
+                    // No NostrFilter field corresponds to "which relay delivered this" — it is a subscription-level
+                    // choice, not a per-event server-side filter — so this is a local predicate against the one
+                    // relay Note.FirstSeenOnRelay actually records (plan §7.2).
+                    var relayUrl = ParseRelayArgument(ast.Source.Argument!);
+                    sourcePredicate = note => note.FirstSeenOnRelay == relayUrl;
+                    break;
+                }
 
             default:
                 throw new ArgumentOutOfRangeException(nameof(ast), ast.Source.Kind, "Unknown FilterSourceKind.");
@@ -181,50 +181,50 @@ internal static class KqlCompiler
                 PushDown(right, kinds, authors, tagT, ref since);
                 break;
             case FilterComparison("kind", FilterComparisonOperator.Equals, var value):
-            {
-                var kind = ParseKind(value);
-                if (!kinds.Contains(kind))
                 {
-                    kinds.Add(kind);
-                }
+                    var kind = ParseKind(value);
+                    if (!kinds.Contains(kind))
+                    {
+                        kinds.Add(kind);
+                    }
 
-                break;
-            }
+                    break;
+                }
 
             case FilterComparison("user.npub", FilterComparisonOperator.Equals, var value):
-            {
-                var hex = ResolvePubkeyHex(value);
-                if (!authors.Contains(hex))
                 {
-                    authors.Add(hex);
-                }
+                    var hex = ResolvePubkeyHex(value);
+                    if (!authors.Contains(hex))
+                    {
+                        authors.Add(hex);
+                    }
 
-                break;
-            }
+                    break;
+                }
 
             case FilterComparison("tags.t", FilterComparisonOperator.Equals, var value):
-            {
-                var tag = NormalizeHashtag(value);
-                if (!tagT.Contains(tag))
                 {
-                    tagT.Add(tag);
+                    var tag = NormalizeHashtag(value);
+                    if (!tagT.Contains(tag))
+                    {
+                        tagT.Add(tag);
+                    }
+
+                    break;
                 }
 
-                break;
-            }
-
             case FilterComparison("created_at", FilterComparisonOperator.GreaterThan, var value):
-            {
-                // NIP-01's `since` is inclusive (>=); our AST's GreaterThan is strict (>). Pushing `v` into
-                // Since=v therefore asks relays for a one-event-wider range than strictly required — a safe
-                // superset, corrected by LocalPredicate re-checking the strict `>` (plan §7.2).
-                var v = ParseLong(value, "created_at");
-                since = since is null ? v : Math.Max(since.Value, v);
-                break;
-            }
+                {
+                    // NIP-01's `since` is inclusive (>=); our AST's GreaterThan is strict (>). Pushing `v` into
+                    // Since=v therefore asks relays for a one-event-wider range than strictly required — a safe
+                    // superset, corrected by LocalPredicate re-checking the strict `>` (plan §7.2).
+                    var v = ParseLong(value, "created_at");
+                    since = since is null ? v : Math.Max(since.Value, v);
+                    break;
+                }
 
-            // Anything else (Or, Not, other fields/operators on these same names) is not pushed down. It is
-            // still correctly handled, because LocalPredicate evaluates the whole Where tree unconditionally.
+                // Anything else (Or, Not, other fields/operators on these same names) is not pushed down. It is
+                // still correctly handled, because LocalPredicate evaluates the whole Where tree unconditionally.
         }
     }
 
@@ -265,35 +265,35 @@ internal static class KqlCompiler
                 return note => CompareString(note.Content, op, value);
 
             case "kind":
-            {
-                RejectContains(field, op);
-                var expected = ParseLong(value, field);
-                return note => CompareLong((long)note.Kind, op, expected);
-            }
-
-            case "created_at":
-            {
-                RejectContains(field, op);
-                var expected = ParseLong(value, field);
-                return note => CompareLong(note.CreatedAt, op, expected);
-            }
-
-            case "user.npub":
-            {
-                var hex = ResolvePubkeyHex(value);
-                return note => CompareString(note.AuthorPubkey, op, hex);
-            }
-
-            case "tags.t":
-            {
-                if (op is not (FilterComparisonOperator.Equals or FilterComparisonOperator.NotEquals or FilterComparisonOperator.Contains))
                 {
-                    throw new FilterParseException("'tags.t' is a set; only '=', '!=' and 'contains' are valid comparisons for it.");
+                    RejectContains(field, op);
+                    var expected = ParseLong(value, field);
+                    return note => CompareLong((long)note.Kind, op, expected);
                 }
 
-                var tag = NormalizeHashtag(value);
-                return note => CompareTagSet(note.Hashtags, op, tag);
-            }
+            case "created_at":
+                {
+                    RejectContains(field, op);
+                    var expected = ParseLong(value, field);
+                    return note => CompareLong(note.CreatedAt, op, expected);
+                }
+
+            case "user.npub":
+                {
+                    var hex = ResolvePubkeyHex(value);
+                    return note => CompareString(note.AuthorPubkey, op, hex);
+                }
+
+            case "tags.t":
+                {
+                    if (op is not (FilterComparisonOperator.Equals or FilterComparisonOperator.NotEquals or FilterComparisonOperator.Contains))
+                    {
+                        throw new FilterParseException("'tags.t' is a set; only '=', '!=' and 'contains' are valid comparisons for it.");
+                    }
+
+                    var tag = NormalizeHashtag(value);
+                    return note => CompareTagSet(note.Hashtags, op, tag);
+                }
 
             case "reply":
                 return CompileBooleanField(field, op, value, note => note.ReplyId is not null);
