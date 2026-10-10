@@ -24,3 +24,11 @@ jobs:
       - run: dotnet build NightlyDawn.sln --no-restore --configuration Release
 
       - run: dotnet test NightlyDawn.sln --no-build --configuration Release
+
+      - name: Upload MainWindow render frames
+        if: always() && matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mainwindow-render-frames
+          path: tests/NightlyDawn.App.RenderTests/bin/Release/net8.0/RenderFrames/*.png
+          if-no-files-found: error
