@@ -50,6 +50,21 @@ public sealed class MainWindowRenderTests
         AssertTextIsNotClipped(window, "Type a query, press Subscribe, and notes stream into the column below.");
     }
 
+    /// <summary>Negative control for <see cref="FindByName{T}"/>, the NameScope-crossing lookup <see cref="RenderSession"/>
+    /// and <see cref="AssertFitsInsideTheWindow"/> both depend on since 0e-b moved the column and the Keys panel into
+    /// their own UserControls (each with its own NameScope; <c>Window.FindControl</c> no longer reaches into them).
+    /// A name that exists nowhere in the real tree must come back null -- proving the lookup discriminates by name,
+    /// the way <c>OfType&lt;T&gt;().First()</c> would not (it would silently grab the first control of that type).</summary>
+    [AvaloniaFact]
+    public void FindByNameAcrossNameScopes_NegativeControl_WrongNameIsNotFound()
+    {
+        using var session = new RenderSession(1280, 800, 1.0);
+
+        Assert.Null(FindByName<Control>(session.Window, "QueryBoxTypoDoesNotExist"));
+        Assert.NotNull(FindByName<Control>(session.Window, "QueryBox"));
+        Assert.NotNull(FindByName<Control>(session.Window, "KeysExpander"));
+    }
+
     /// <summary>Owns one headless window plus the fakes it was built with; loads the Keys panel (NoKey state,
     /// expanded) and a small deterministic timeline before the frame is captured.</summary>
     private sealed class RenderSession : IDisposable
@@ -73,9 +88,9 @@ public sealed class MainWindowRenderTests
             HeadlessWindowExtensions.SetRenderScaling(Window, scale);
             Dispatcher.UIThread.RunJobs();
 
-            var keysExpander = Window.FindControl<Expander>("KeysExpander")!;
+            var keysExpander = FindByName<Expander>(Window, "KeysExpander")!;
             keysExpander.IsExpanded = true;
-            Pump(() => Window.FindControl<Control>("GenerateBox")?.IsVisible == true,
+            Pump(() => FindByName<Control>(Window, "GenerateBox")?.IsVisible == true,
                 "the Keys panel never reached the NoKey/Generate state");
 
             var timeline = (TimelineColumnViewModel)Window.DataContext!;
@@ -119,7 +134,10 @@ public sealed class MainWindowRenderTests
         private static Note MakeNote(int n, string content) => new(
             Id: n.ToString("x64"),
             AuthorPubkey: n.ToString("x64"),
-            CreatedAt: DateTimeOffset.UtcNow.ToUnixTimeSeconds() - n * 60,
+            // Fixed epoch (0e-b, plan §6.2): keeps the wall clock out of the rendered time labels. On its own this
+            // does not make the frame byte-identical across runs -- the Fluent Expander's chevron is still captured at
+            // a wall-clock-dependent point of its rotation, which is tracked separately.
+            CreatedAt: 1_700_000_000 - n * 60,
             Kind: NoteKind.Text,
             Content: content,
             Tags: []);
@@ -152,11 +170,19 @@ public sealed class MainWindowRenderTests
             $"({buffer.Size.Width}x{buffer.Size.Height}); it looks blank rather than rendered.");
     }
 
+    /// <summary>Finds a control by <c>Name</c> anywhere in <paramref name="root"/>'s visual tree, crossing
+    /// UserControl NameScope boundaries that <c>Window.FindControl</c> cannot cross (0e-b moved the column and
+    /// the Keys panel into their own UserControls, each with its own NameScope). Matches by name only, unlike
+    /// <c>OfType&lt;T&gt;().First()</c>, which would silently grab the wrong control of the same type once one
+    /// is added (see the negative control <see cref="FindByNameAcrossNameScopes_NegativeControl_WrongNameIsNotFound"/>).</summary>
+    private static T? FindByName<T>(Visual root, string name) where T : Control =>
+        root.GetVisualDescendants().OfType<T>().FirstOrDefault(c => c.Name == name);
+
     /// <summary>(b): the named control must be laid out entirely inside the window's DIP bounds, with a non-zero
     /// size — catches the "control clipped/overlaps at this size" class of HiDPI/layout break.</summary>
     private static void AssertFitsInsideTheWindow(MainWindow window, string controlName)
     {
-        var control = window.FindControl<Control>(controlName) ?? throw new Xunit.Sdk.XunitException($"{controlName}: not found in the visual tree");
+        var control = FindByName<Control>(window, controlName) ?? throw new Xunit.Sdk.XunitException($"{controlName}: not found in the visual tree");
         var topLeft = control.TranslatePoint(new Point(0, 0), window) ?? throw new Xunit.Sdk.XunitException($"{controlName}: not attached to the window's visual tree");
         var bounds = control.Bounds;
 

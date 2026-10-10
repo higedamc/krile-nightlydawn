@@ -1,0 +1,34 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:tl="using:NightlyDawn.App.Timelines"
+             xmlns:views="using:NightlyDawn.App.Views"
+             x:Class="NightlyDawn.App.Views.TimelineColumnView"
+             x:DataType="tl:TimelineColumnViewModel">
+  <!-- The one timeline column (1e). Query text goes to the ITimelineSourceFactory verbatim; KQL is compiled downstream (1c). -->
+  <Border Padding="12"
+          BorderThickness="1" BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+          CornerRadius="6">
+    <DockPanel>
+      <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8">
+        <TextBox x:Name="QueryBox" Width="520"
+                 Text="{Binding Query, Mode=TwoWay}"
+                 PlaceholderText="from home   |   from user(npub1...)   |   from search(&quot;nostr&quot;)" />
+        <Button x:Name="SubscribeButton" Content="Subscribe" IsDefault="True" Click="OnSubscribeClick" />
+      </StackPanel>
+
+      <ProgressBar DockPanel.Dock="Top" Margin="0,8,0,0" IsIndeterminate="True"
+                   IsVisible="{Binding IsLoading}" />
+
+      <TextBlock DockPanel.Dock="Top" Margin="0,8,0,4" Opacity="0.7"
+                 Text="{Binding Status}" />
+
+      <ListBox x:Name="TimelineList" ItemsSource="{Binding Notes}" SelectionMode="Single">
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="tl:NoteRow">
+            <views:NoteRowView />
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </DockPanel>
+  </Border>
+</UserControl>

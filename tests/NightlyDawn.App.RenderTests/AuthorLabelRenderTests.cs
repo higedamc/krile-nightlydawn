@@ -125,7 +125,7 @@ public sealed class AuthorLabelRenderTests
         private static Note MakeNote(int n, string authorPubkey, string content) => new(
             Id: n.ToString("x64"),
             AuthorPubkey: authorPubkey,
-            CreatedAt: 1_700_000_000 - n * 60, // Fixed, unlike MainWindowRenderTests' SampleNotes: a deterministic frame is not this leaf's concern to fix, but there is no reason to add more nondeterminism here.
+            CreatedAt: 1_700_000_000 - n * 60, // Fixed, same as MainWindowRenderTests' SampleNotes (0e-b, plan §6.2).
             Kind: NoteKind.Text,
             Content: content,
             Tags: []);
