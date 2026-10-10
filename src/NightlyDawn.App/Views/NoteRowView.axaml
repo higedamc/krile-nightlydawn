@@ -1,0 +1,13 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:tl="using:NightlyDawn.App.Timelines"
+             x:Class="NightlyDawn.App.Views.NoteRowView"
+             x:DataType="tl:NoteRow">
+  <StackPanel Spacing="2" Margin="0,4">
+    <StackPanel Orientation="Horizontal" Spacing="8">
+      <TextBlock Text="{Binding AuthorLabel}" FontFamily="monospace" FontWeight="SemiBold" />
+      <TextBlock Text="{Binding TimeLabel}" Opacity="0.6" />
+    </StackPanel>
+    <TextBlock Text="{Binding DisplayContent}" TextWrapping="Wrap" />
+  </StackPanel>
+</UserControl>

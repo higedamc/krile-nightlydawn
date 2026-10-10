@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:tl="using:NightlyDawn.App.Timelines"
+        xmlns:views="using:NightlyDawn.App.Views"
         x:Class="NightlyDawn.App.MainWindow"
         x:DataType="tl:TimelineColumnViewModel"
         Title="Krile NightlyDawn"
@@ -106,13 +107,7 @@
         <ListBox x:Name="TimelineList" ItemsSource="{Binding Notes}" SelectionMode="Single">
           <ListBox.ItemTemplate>
             <DataTemplate x:DataType="tl:NoteRow">
-              <StackPanel Spacing="2" Margin="0,4">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                  <TextBlock Text="{Binding AuthorLabel}" FontFamily="monospace" FontWeight="SemiBold" />
-                  <TextBlock Text="{Binding TimeLabel}" Opacity="0.6" />
-                </StackPanel>
-                <TextBlock Text="{Binding DisplayContent}" TextWrapping="Wrap" />
-              </StackPanel>
+              <views:NoteRowView />
             </DataTemplate>
           </ListBox.ItemTemplate>
         </ListBox>
