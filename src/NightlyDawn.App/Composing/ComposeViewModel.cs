@@ -163,9 +163,9 @@ public sealed class ComposeViewModel(Func<INotePublisher?> publisher, Func<IPubl
         {
             var published = mode switch
             {
-                ComposeMode.Reply => await active.ReplyToAsync(target!, Content, cancellationToken).ConfigureAwait(false),
-                ComposeMode.Quote => await active.QuoteAsync(target!, Content, cancellationToken).ConfigureAwait(false),
-                _ => await active.PostNoteAsync(Content, cancellationToken).ConfigureAwait(false),
+                ComposeMode.Reply => await active.ReplyToAsync(target!, sentContent, cancellationToken).ConfigureAwait(false),
+                ComposeMode.Quote => await active.QuoteAsync(target!, sentContent, cancellationToken).ConfigureAwait(false),
+                _ => await active.PostNoteAsync(sentContent, cancellationToken).ConfigureAwait(false),
             };
 
             Post(() =>
@@ -175,8 +175,18 @@ public sealed class ComposeViewModel(Func<INotePublisher?> publisher, Func<IPubl
                     Content = string.Empty;
                 }
 
-                Mode = ComposeMode.Post;
-                Target = null;
+                // Guarded the same way as Content above: Mode/Target are mutable fields this continuation does
+                // not own exclusively. BeginReply/BeginQuote carry no IsBusy guard (a row's Reply/Quote button
+                // only looks at CanReplyOrRepost, which is kind-only), so a row's click while this call is still
+                // in flight can retarget the box before this runs. Resetting unconditionally would silently
+                // drop that new target, and the next Post the user sends would publish as a plain note instead
+                // of the reply/quote they just selected.
+                if (Mode == mode && ReferenceEquals(Target, target))
+                {
+                    Mode = ComposeMode.Post;
+                    Target = null;
+                }
+
                 var accepted = published.PublishResult.Outcomes.Count(o => o.Accepted);
                 Status = $"Posted · {accepted}/{published.PublishResult.Outcomes.Count} relays accepted.";
                 sink()?.NotePublished(published.Note, published.PublishResult);

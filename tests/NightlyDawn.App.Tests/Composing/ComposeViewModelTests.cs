@@ -195,6 +195,58 @@ public class ComposeViewModelTests
         Assert.Equal("Posted · 1/1 relays accepted.", vm.Status);
     }
 
+    [Fact]
+    public async Task PostAsync_OnSuccess_DoesNotResetModeOrTarget_IfRetargetedWhileTheCallWasInFlight()
+    {
+        // Negative control (PR #24 review, blocking carried from non-blocking ③): revert the
+        // `if (Mode == mode && ReferenceEquals(Target, target))` guard to an unconditional reset and this
+        // fails -- the Reply the row's button selected mid-flight is wiped back to Post/null by a
+        // continuation that belongs to the earlier, unrelated plain Post call.
+        //
+        // BeginReply/BeginQuote carry no IsBusy guard (NoteRowView.axaml's Reply/Quote buttons only look at
+        // CanReplyOrRepost, which is kind-only), so this gap is real: a user can click a row's Reply button
+        // while a prior plain Post is still in flight.
+        var target = TestNotes.Make(8, 1);
+        var publisher = new FakeNotePublisher { Gate = new TaskCompletionSource() };
+        var sink = new FakePublishedNoteSink();
+        var vm = NewViewModel(publisher, sink);
+        vm.Content = "hello";
+
+        var post = vm.PostAsync(); // Mode=Post, Target=null captured here
+        vm.BeginReply(target); // retargeted while the call above is still suspended on Gate
+        publisher.Gate.SetResult();
+        await post;
+
+        Assert.Equal(ComposeMode.Reply, vm.Mode);
+        Assert.Same(target, vm.Target);
+    }
+
+    [Fact]
+    public async Task PostAsync_AfterAnInFlightRetarget_TheNextPostUsesTheNewTarget_NotThePreviousMode()
+    {
+        // Negative control: same mutation as above. Without the guard, Mode/Target are reset to Post/null
+        // by the time this second PostAsync runs, so it would publish as a plain note -- the exact "reply
+        // publishes as an unthreaded post" failure the review called out.
+        var target = TestNotes.Make(9, 1);
+        var publisher = new FakeNotePublisher { Gate = new TaskCompletionSource() };
+        var sink = new FakePublishedNoteSink();
+        var vm = NewViewModel(publisher, sink);
+        vm.Content = "hello";
+
+        var post = vm.PostAsync();
+        vm.BeginReply(target);
+        publisher.Gate.SetResult();
+        await post;
+
+        vm.Content = "a reply";
+        await vm.PostAsync();
+
+        Assert.Equal(2, publisher.Calls.Count);
+        Assert.Equal("Reply", publisher.Calls[1].Method);
+        Assert.Same(target, publisher.Calls[1].Target);
+        Assert.Equal("a reply", publisher.Calls[1].Content);
+    }
+
     /// <summary>Defers every posted action until <see cref="Release"/>, so a test can call <see cref="ComposeViewModel.PostAsync"/>
     /// twice back-to-back before either one's completion continuation runs -- proving the guard is the
     /// synchronous <c>IsBusy</c> check, not a race that happens to resolve in test timing's favor.</summary>
