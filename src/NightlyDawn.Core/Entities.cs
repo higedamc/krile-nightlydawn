@@ -121,7 +121,8 @@ public enum NoteKind
 }
 
 /// <summary>Domain-mapped kind:1/6/16 event (plan §4: Status, Retweet/Quote, Reply). <see cref="Tags"/> keeps the raw tags so KQL's <c>tags.t</c> field (plan §4) stays expressible (B7).
-/// <para><see cref="FirstSeenOnRelay"/> is the relay that delivered the event <em>first</em>; later deliveries of the same id from other relays are deduplicated before a <see cref="Note"/> exists, so there is deliberately no list here. Consequently KQL's <c>relay</c> is a <em>source</em> (<c>relay(wss://…)</c> = read from that one relay), not a <c>where</c> field (decided 2026-10-07; accumulate per-relay sightings via a dedicated <see cref="TimelineUpdate"/> if a consumer ever needs it).</para></summary>
+/// <para><see cref="FirstSeenOnRelay"/> is the relay that delivered the event <em>first</em>; later deliveries of the same id from other relays are deduplicated before a <see cref="Note"/> exists, so there is deliberately no list here. Consequently KQL's <c>relay</c> is a <em>source</em> (<c>relay(wss://…)</c> = read from that one relay), not a <c>where</c> field (decided 2026-10-07; accumulate per-relay sightings via a dedicated <see cref="TimelineUpdate"/> if a consumer ever needs it).</para>
+/// <para><see cref="Hashtags"/> entries are always lowercased by whatever maps a <see cref="NostrEvent"/> into a <see cref="Note"/> (currently NightlyDawn.Nostr's EventMapper). KQL's <c>tags.t</c> compiler (NightlyDawn.Filters' KqlCompiler) relies on this: it lowercases the query value the exact same way so the relay-filter push-down and the local predicate compare byte-identical strings on both sides (plan §7.6 item ③). If this mapping ever stops lowercasing, that comparison silently goes case-sensitive and starts dropping notes.</para></summary>
 public sealed record Note(
     string Id,
     string AuthorPubkey,
