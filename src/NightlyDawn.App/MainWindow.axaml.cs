@@ -30,6 +30,7 @@ public sealed partial class MainWindow : Window
     private readonly TextBox _exportPassphrase;
     private readonly TextBox _exportedKey;
     private readonly TextBlock _pubkeyText;
+    private readonly TextBlock _npubText;
     private readonly Button _signOutButton;
     private readonly Control _cancelSignOutButton;
 
@@ -59,6 +60,7 @@ public sealed partial class MainWindow : Window
         _exportPassphrase = this.FindControl<TextBox>("ExportPassphrase")!;
         _exportedKey = this.FindControl<TextBox>("ExportedKey")!;
         _pubkeyText = this.FindControl<TextBlock>("PubkeyText")!;
+        _npubText = this.FindControl<TextBlock>("NpubText")!;
         _signOutButton = this.FindControl<Button>("SignOutButton")!;
         _cancelSignOutButton = this.FindControl<Control>("CancelSignOutButton")!;
         _keys.PropertyChanged += (_, _) => RenderKeyPanel();
@@ -76,6 +78,7 @@ public sealed partial class MainWindow : Window
         _unlockedBox.IsVisible = _keys.ShowUnlocked;
         _exportBox.IsVisible = _keys.HasExport;
         _pubkeyText.Text = _keys.PubkeyHex ?? string.Empty;
+        _npubText.Text = _keys.Npub ?? string.Empty;
         _exportedKey.Text = _keys.ExportedKey ?? string.Empty;
         _signOutButton.Content = _keys.SignOutArmed ? "Confirm: delete the stored key" : "Sign out (deletes the stored key from this device)";
         _cancelSignOutButton.IsVisible = _keys.SignOutArmed;
@@ -132,6 +135,26 @@ public sealed partial class MainWindow : Window
     private async void OnSignOutClick(object? sender, RoutedEventArgs e) => await _keys.SignOutAsync();
 
     private void OnCancelSignOutClick(object? sender, RoutedEventArgs e) => _keys.CancelSignOut();
+
+    // npub is public data, but still copied only on an explicit click (same rule as every clipboard write here).
+    private async void OnCopyNpubClick(object? sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+            if (clipboard is null || string.IsNullOrEmpty(_keys.Npub))
+            {
+                return;
+            }
+
+            await clipboard.SetTextAsync(_keys.Npub);
+            _keyStatus.Text = "npub copied to the clipboard.";
+        }
+        catch (Exception ex)
+        {
+            _keyStatus.Text = $"Copy failed ({ex.GetType().Name}).";
+        }
+    }
 
     private void OnClearExportClick(object? sender, RoutedEventArgs e) => _keys.ClearExport();
 

@@ -41,8 +41,13 @@
         <!-- Unlocked -->
         <StackPanel x:Name="UnlockedBox" Spacing="6">
           <StackPanel Orientation="Horizontal" Spacing="8">
-            <TextBlock Text="Public key (hex):" Opacity="0.7" />
-            <TextBlock x:Name="PubkeyText" FontFamily="monospace" />
+            <TextBlock Text="Public key:" Opacity="0.7" />
+            <TextBlock x:Name="NpubText" FontFamily="monospace" />
+            <Button Content="Copy npub" Click="OnCopyNpubClick" />
+          </StackPanel>
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBlock Text="hex:" Opacity="0.5" FontSize="12" />
+            <TextBlock x:Name="PubkeyText" FontFamily="monospace" Opacity="0.5" FontSize="12" />
           </StackPanel>
           <StackPanel Orientation="Horizontal" Spacing="8">
             <TextBox x:Name="ExportPassphrase" Width="240" PasswordChar="●" PlaceholderText="Passphrase for the export" />
