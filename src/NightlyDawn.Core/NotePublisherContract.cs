@@ -13,8 +13,9 @@ public sealed record PublishedNote(Note Note, PublishResult PublishResult);
 /// <see cref="NoteEventBuilder"/> (pure, already implemented and tested in 0d), signs it with
 /// <see cref="IKeyStore.SignEventAsync"/>, and publishes it with <see cref="INostrBackend.PublishAsync"/>.
 ///
-/// <para><b>Declaration only (0d leaf brief): no implementation here.</b> Implementation is L3, after 0e's
-/// view extraction gives a compose box somewhere to mount that is not <c>MainWindow.axaml</c>.</para>
+/// <para><b>Declaration only here.</b> The logic implementation is <c>NightlyDawn.Nostr.Publishing.NotePublisher</c>
+/// (L3a); wiring it into the UI (DI registration, the compose box in a view that is not
+/// <c>MainWindow.axaml</c>) is L3b, after 0e's view extraction.</para>
 ///
 /// <para><b><c>created_at</c></b>: implementations must inject a <see cref="TimeProvider"/> rather than
 /// reading <see cref="DateTimeOffset.UtcNow"/> directly, so tests that exercise a full publisher (not just the
@@ -42,7 +43,13 @@ public interface INotePublisher
 
     Task<PublishedNote> QuoteAsync(Note quoted, string content, CancellationToken cancellationToken = default);
 
+    /// <summary>Returns <see cref="Core.PublishResult"/>, not <see cref="PublishedNote"/> (Lead-confirmed contract
+    /// fix, L3a leaf brief §9.1): a reaction is kind:7, which <see cref="NoteKind"/> cannot represent (it is
+    /// 1/6/16 only -- the KQL <c>kind</c> source, <see cref="IEventMapper.ToNote"/>, and every column's
+    /// semantics all depend on that), and a reaction is never inserted as a timeline row (the UI only flips a
+    /// heart's state), so there is no <see cref="Note"/> to return and no reason to widen <see cref="NoteKind"/>
+    /// just to produce one.</summary>
     /// <param name="target">The note being reacted to.</param>
     /// <param name="content">NIP-25 reaction content; <c>"+"</c> (the conventional like) unless the caller passes something else (an emoji reaction).</param>
-    Task<PublishedNote> ReactAsync(Note target, string content = "+", CancellationToken cancellationToken = default);
+    Task<PublishResult> ReactAsync(Note target, string content = "+", CancellationToken cancellationToken = default);
 }
