@@ -7,8 +7,10 @@ using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
+using NightlyDawn.App.Composing;
 using NightlyDawn.App.Keys;
 using NightlyDawn.App.Timelines;
+using NightlyDawn.App.Views;
 
 namespace NightlyDawn.App;
 
@@ -17,6 +19,7 @@ public sealed partial class MainWindow : Window
     private readonly TextBlock _platformInfo;
     private readonly TextBox _clipboardProbe;
     private readonly TextBlock _clipboardStatus;
+    private readonly ComposeViewModel _compose;
     private readonly TimelineColumnViewModel _timeline;
     private readonly KeyPanelViewModel _keys;
     private readonly TextBlock _keyStatus;
@@ -41,12 +44,27 @@ public sealed partial class MainWindow : Window
         _clipboardProbe = this.FindControl<TextBox>("ClipboardProbe")!;
         _clipboardStatus = this.FindControl<TextBlock>("ClipboardStatus")!;
 
+        // Compose box: built before the timeline column below, since each row's NoteRowActions (plan
+        // §10.1-2) needs a compose view model to hand Reply/Quote targets to. Reaches _timeline back through
+        // a Func (sink) rather than a direct reference -- the column does not exist yet at this point.
+        _compose = new ComposeViewModel(
+            publisher: () => AppServices.NotePublisher,
+            sink: () => _timeline,
+            postToUi: action => Dispatcher.UIThread.Post(action));
+        this.FindControl<ComposeBoxView>("ComposeBox")!.DataContext = _compose;
+
         // One read-only column for now (1e). The factory and profile store come from the composition point,
-        // never from NightlyDawn.Nostr directly (B9).
+        // never from NightlyDawn.Nostr directly (B9). actionsFactory builds each row's publish handle at
+        // construction time (plan §10.1-2), closing over _compose/_timeline/AppServices.NotePublisher so a
+        // host wiring a real publisher later needs no change here.
         _timeline = new TimelineColumnViewModel(
             AppServices.TimelineSourceFactory,
             postToUi: action => Dispatcher.UIThread.Post(action),
-            profileStore: AppServices.ProfileStore);
+            profileStore: AppServices.ProfileStore,
+            // _timeline is read here only through this closure, invoked lazily (plan §10.1-2's row-build time,
+            // well after this constructor returns) -- the nullable analyzer cannot see that, since it only
+            // tracks flow up to this statement, not when the delegate actually runs.
+            actionsFactory: note => new NoteRowActions(note, () => AppServices.NotePublisher, _compose, _timeline!, _timeline!.ReportStatus));
         DataContext = _timeline;
 
         // Keys panel: talks to Core's IKeyStore only (the host constructs the real store). Independent of the timeline.
