@@ -92,10 +92,10 @@ internal static class TestNotes
 {
     public const string Author = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
 
-    public static Note Make(int n, long createdAt, string? content = null, NoteKind kind = NoteKind.Text) =>
+    public static Note Make(int n, long createdAt, string? content = null, NoteKind kind = NoteKind.Text, string? authorPubkey = null) =>
         new(
             Id: n.ToString("x64"),
-            AuthorPubkey: Author,
+            AuthorPubkey: authorPubkey ?? Author,
             CreatedAt: createdAt,
             Kind: kind,
             Content: content ?? $"note {n}",

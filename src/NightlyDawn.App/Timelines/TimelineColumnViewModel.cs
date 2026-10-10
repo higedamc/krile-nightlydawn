@@ -21,6 +21,7 @@ public sealed class TimelineColumnViewModel : INotifyPropertyChanged, IDisposabl
     private readonly ITimelineSourceFactory _factory;
     private readonly Action<Action> _postToUi;
     private readonly int _maxNotes;
+    private readonly IProfileStore? _profileStore;
     private readonly HashSet<string> _knownIds = new(StringComparer.Ordinal);
 
     private CancellationTokenSource? _streamCts;
@@ -30,7 +31,9 @@ public sealed class TimelineColumnViewModel : INotifyPropertyChanged, IDisposabl
     private bool _isLoading;
     private bool _disposed;
 
-    public TimelineColumnViewModel(ITimelineSourceFactory factory, Action<Action> postToUi, int maxNotes = DefaultMaxNotes)
+    /// <param name="profileStore">Resolves author display names (plan §8). Null skips profile lookups entirely --
+    /// rows show the pubkey-prefix fallback, same as before this leaf.</param>
+    public TimelineColumnViewModel(ITimelineSourceFactory factory, Action<Action> postToUi, int maxNotes = DefaultMaxNotes, IProfileStore? profileStore = null)
     {
         ArgumentNullException.ThrowIfNull(factory);
         ArgumentNullException.ThrowIfNull(postToUi);
@@ -38,6 +41,7 @@ public sealed class TimelineColumnViewModel : INotifyPropertyChanged, IDisposabl
         _factory = factory;
         _postToUi = postToUi;
         _maxNotes = maxNotes;
+        _profileStore = profileStore;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -127,6 +131,14 @@ public sealed class TimelineColumnViewModel : INotifyPropertyChanged, IDisposabl
         {
             await foreach (var update in source.StreamAsync(cancellationToken).ConfigureAwait(false))
             {
+                // Prefetched and awaited here, on the background task, before the row is ever queued for
+                // insertion -- not after (plan §8.1: NoteRow is immutable, so a row built before its author's
+                // profile resolves would show the fallback label forever).
+                if (update is NoteArrived arrived)
+                {
+                    await PrefetchAuthorAsync(arrived.Note.AuthorPubkey, cancellationToken).ConfigureAwait(false);
+                }
+
                 Post(generation, () => Apply(update));
             }
 
@@ -148,6 +160,30 @@ public sealed class TimelineColumnViewModel : INotifyPropertyChanged, IDisposabl
                 IsLoading = false;
                 Status = $"Timeline stopped: {ex.GetType().Name}.";
             });
+        }
+    }
+
+    /// <summary>Resolves (or confirms absent) one author's profile before its row is built. Swallows every
+    /// failure except cancellation: a relay hiccup on the profile lookup must not stop the note stream --
+    /// <see cref="NoteRow.From"/> falls back to the pubkey-prefix label when nothing is cached.</summary>
+    private async Task PrefetchAuthorAsync(string authorPubkey, CancellationToken cancellationToken)
+    {
+        if (_profileStore is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _profileStore.PrefetchAsync([authorPubkey], cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            // Unresolved: TryGet below returns null either way, same as "no kind:0 exists".
         }
     }
 
@@ -185,7 +221,7 @@ public sealed class TimelineColumnViewModel : INotifyPropertyChanged, IDisposabl
             return; // The same event can arrive from several relays (B7); show it once.
         }
 
-        var row = NoteRow.From(note);
+        var row = NoteRow.From(note, _profileStore?.TryGet(note.AuthorPubkey));
         var index = 0;
         while (index < Notes.Count && Notes[index].CreatedAt >= row.CreatedAt)
         {

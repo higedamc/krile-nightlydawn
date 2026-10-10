@@ -42,6 +42,7 @@ internal static class Program
 
         var timelineSourceFactory = new NostrTimelineSourceFactory(relays);
         AppServices.TimelineSourceFactory = timelineSourceFactory;
+        AppServices.ProfileStore = timelineSourceFactory.ProfileStore; // Shares the same backend/relay pool (plan §8).
         AppServices.ScreenshotPath = Environment.GetEnvironmentVariable(ScreenshotEnvVar);
         Console.Error.WriteLine($"[NightlyDawn] relays: {string.Join(", ", relays.Select(r => r.Value))}");
 
