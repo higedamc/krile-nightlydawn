@@ -34,12 +34,18 @@ namespace NightlyDawn.Keys;
 /// .NET release from 6 through at least 10.0.12 has a confirmed bug
 /// (dotnet/runtime#135201) where that path silently reports success even when the
 /// underlying fsync fails (full disk, I/O error, a flaky network filesystem) — see
-/// <see cref="NativeFileSync"/>'s doc for the mechanism. Not covered: <c>rename(2)</c>
-/// replacing the directory entry is itself only guaranteed durable once the *containing
-/// directory* is fsynced, which this class does not do (needs a second native directory-fd
-/// fsync; not implemented). In the ordinary case this is a vanishingly small window
-/// between two already rare events; it is called out here rather than silently left
-/// unaddressed.
+/// <see cref="NativeFileSync"/>'s doc for the mechanism. <c>rename(2)</c> replacing the
+/// directory entry is itself only guaranteed durable once the *containing directory* is
+/// fsynced — <see cref="WriteAsync"/> does that too, via
+/// <see cref="NativeFileSync.SyncDirectoryToDisk"/>, right after the rename — so a power
+/// loss between the rename and the directory metadata reaching the device is covered as
+/// well, both for the common case (key rotation; the old key survives either way) and the
+/// one case that would otherwise be unrecoverable (a first-ever
+/// <c>GenerateLocalKeyAsync</c>, where losing the rename loses the only copy of the key).
+/// Not covered: a crash between the file fsync and the directory fsync still leaves the
+/// new file's *data* durable (that fsync already completed) but the directory entry
+/// pointing at it possibly not yet durable — narrower than the original gap, not zero,
+/// because POSIX has no single syscall that makes both atomic together.
 /// </summary>
 [UnsupportedOSPlatform("windows")]
 public sealed class FileKeyFileStore(string filePath) : IKeyFileStore
@@ -60,6 +66,7 @@ public sealed class FileKeyFileStore(string filePath) : IKeyFileStore
         }
     }
 
+    /// <summary>Writes <paramref name="ncryptsec"/> durably. If the directory fsync after the rename throws, the key is already on disk and active in memory, but the caller sees failure rather than a silently-swallowed error — self-recovering, since the file is readable and the next unlock with the same passphrase succeeds.</summary>
     public async Task WriteAsync(string ncryptsec, CancellationToken cancellationToken = default)
     {
         var directory = Path.GetDirectoryName(filePath);
@@ -94,6 +101,14 @@ public sealed class FileKeyFileStore(string filePath) : IKeyFileStore
         }
 
         File.Move(tempPath, filePath, overwrite: true);
+
+        // The rename above is only guaranteed durable once the directory entry itself
+        // reaches storage — see the class doc's "Not covered" paragraph, now covered.
+        var absoluteDirectory = Path.GetDirectoryName(Path.GetFullPath(filePath));
+        if (!string.IsNullOrEmpty(absoluteDirectory))
+        {
+            NativeFileSync.SyncDirectoryToDisk(absoluteDirectory);
+        }
     }
 
     public Task DeleteAsync(CancellationToken cancellationToken = default)
