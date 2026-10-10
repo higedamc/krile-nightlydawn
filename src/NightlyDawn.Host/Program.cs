@@ -25,6 +25,14 @@ internal static class Program
     /// </summary>
     private const string ScreenshotEnvVar = "NIGHTLYDAWN_SCREENSHOT";
 
+    /// <summary>
+    /// Theme override (L1): <c>NIGHTLYDAWN_THEME=dark</c> or <c>light</c> pins a variant, <c>system</c> (or unset)
+    /// follows the OS. Parsing and the Core-to-Avalonia mapping live in the App layer's
+    /// <see cref="NightlyDawn.App.Theming.ThemeController"/>, so the host, the render harness and a future in-app
+    /// toggle all switch the theme through one code path.
+    /// </summary>
+    private static readonly string ThemeEnvVar = NightlyDawn.App.Theming.ThemeController.EnvironmentVariable;
+
     [STAThread]
     private static int Main(string[] args)
     {
@@ -44,6 +52,20 @@ internal static class Program
         AppServices.TimelineSourceFactory = timelineSourceFactory;
         AppServices.ProfileStore = timelineSourceFactory.ProfileStore; // Shares the same backend/relay pool (plan §8).
         AppServices.ScreenshotPath = Environment.GetEnvironmentVariable(ScreenshotEnvVar);
+
+        var themeSetting = Environment.GetEnvironmentVariable(ThemeEnvVar);
+        if (NightlyDawn.App.Theming.ThemeController.TryParse(themeSetting, out var theme))
+        {
+            AppServices.Theme = theme;
+        }
+        else
+        {
+            // Unrecognised value: say so and follow the OS. Silently treating a typo as "system" would look
+            // exactly like a working setting.
+            Console.Error.WriteLine($"[NightlyDawn] {ThemeEnvVar}=\"{themeSetting}\" is not one of light|dark|system; following the OS theme.");
+        }
+
+        Console.Error.WriteLine($"[NightlyDawn] theme: {AppServices.Theme.ToString().ToLowerInvariant()}");
         Console.Error.WriteLine($"[NightlyDawn] relays: {string.Join(", ", relays.Select(r => r.Value))}");
 
         // Local NIP-49 key store (leaf 1b), wired here so the App only ever sees Core's IKeyStore. The timeline

@@ -1,0 +1,73 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!--
+    Krile NightlyDawn's palette (L1): a dark-leaning purple, with a light variant that keeps the same hue.
+    Merged into Application.Resources (App.axaml), which is consulted before the FluentTheme's own styles, so
+    these keys win without any view having to opt in. Nothing here restyles a control template: the whole leaf
+    is colors, which is what keeps it orthogonal to the leaves rewriting the shell.
+
+    Every key below is either ours (Krile*) or an override of a Fluent/Avalonia key that something already
+    binds to. Which Fluent keys actually reach the screen was measured, not assumed: ThemeRenderTests
+    samples the rendered frame and fails if the window background is not this dictionary's color.
+  -->
+  <ResourceDictionary.ThemeDictionaries>
+
+    <ResourceDictionary x:Key="Dark">
+      <Color x:Key="KrileWindowBackgroundColor">#FF1C1822</Color>
+      <Color x:Key="KrilePanelBackgroundColor">#FF262030</Color>
+      <Color x:Key="KrileBorderColor">#FF3A3348</Color>
+      <Color x:Key="KrileForegroundColor">#FFE8E4F0</Color>
+      <Color x:Key="KrileAccentColor">#FF9B7BE0</Color>
+
+      <SolidColorBrush x:Key="KrileWindowBackgroundBrush" Color="#FF1C1822" />
+      <SolidColorBrush x:Key="KrilePanelBackgroundBrush" Color="#FF262030" />
+      <SolidColorBrush x:Key="KrileBorderBrush" Color="#FF3A3348" />
+      <SolidColorBrush x:Key="KrileForegroundBrush" Color="#FFE8E4F0" />
+      <SolidColorBrush x:Key="KrileAccentBrush" Color="#FF9B7BE0" />
+      <SolidColorBrush x:Key="KrileSelectionBrush" Color="#FF3B2F5C" />
+      <SolidColorBrush x:Key="KrileOnAccentBrush" Color="#FF14101C" />
+
+      <!-- Avalonia's Window template fills its background with this brush. -->
+      <SolidColorBrush x:Key="ApplicationPageBackgroundThemeBrush" Color="#FF1C1822" />
+      <!-- The column's Border (TimelineColumnView.axaml) binds this one. -->
+      <SolidColorBrush x:Key="SystemControlForegroundBaseLowBrush" Color="#FF3A3348" />
+
+      <!-- Fluent derives button/selection/focus accents from these six. -->
+      <Color x:Key="SystemAccentColor">#FF9B7BE0</Color>
+      <Color x:Key="SystemAccentColorLight1">#FFAD92E7</Color>
+      <Color x:Key="SystemAccentColorLight2">#FFC0AAEE</Color>
+      <Color x:Key="SystemAccentColorLight3">#FFD3C2F5</Color>
+      <Color x:Key="SystemAccentColorDark1">#FF7F5CC9</Color>
+      <Color x:Key="SystemAccentColorDark2">#FF6744AD</Color>
+      <Color x:Key="SystemAccentColorDark3">#FF4E3188</Color>
+    </ResourceDictionary>
+
+    <ResourceDictionary x:Key="Light">
+      <Color x:Key="KrileWindowBackgroundColor">#FFF4F1F8</Color>
+      <Color x:Key="KrilePanelBackgroundColor">#FFFFFFFF</Color>
+      <Color x:Key="KrileBorderColor">#FFD3C9E2</Color>
+      <Color x:Key="KrileForegroundColor">#FF1E1A26</Color>
+      <Color x:Key="KrileAccentColor">#FF5B3FA8</Color>
+
+      <SolidColorBrush x:Key="KrileWindowBackgroundBrush" Color="#FFF4F1F8" />
+      <SolidColorBrush x:Key="KrilePanelBackgroundBrush" Color="#FFFFFFFF" />
+      <SolidColorBrush x:Key="KrileBorderBrush" Color="#FFD3C9E2" />
+      <SolidColorBrush x:Key="KrileForegroundBrush" Color="#FF1E1A26" />
+      <SolidColorBrush x:Key="KrileAccentBrush" Color="#FF5B3FA8" />
+      <SolidColorBrush x:Key="KrileSelectionBrush" Color="#FFE2D9F4" />
+      <SolidColorBrush x:Key="KrileOnAccentBrush" Color="#FFFFFFFF" />
+
+      <SolidColorBrush x:Key="ApplicationPageBackgroundThemeBrush" Color="#FFF4F1F8" />
+      <SolidColorBrush x:Key="SystemControlForegroundBaseLowBrush" Color="#FFD3C9E2" />
+
+      <Color x:Key="SystemAccentColor">#FF5B3FA8</Color>
+      <Color x:Key="SystemAccentColorLight1">#FF7257BC</Color>
+      <Color x:Key="SystemAccentColorLight2">#FF8E78CD</Color>
+      <Color x:Key="SystemAccentColorLight3">#FFAE9CDE</Color>
+      <Color x:Key="SystemAccentColorDark1">#FF4A3190</Color>
+      <Color x:Key="SystemAccentColorDark2">#FF3A2575</Color>
+      <Color x:Key="SystemAccentColorDark3">#FF2A1A58</Color>
+    </ResourceDictionary>
+
+  </ResourceDictionary.ThemeDictionaries>
+</ResourceDictionary>
