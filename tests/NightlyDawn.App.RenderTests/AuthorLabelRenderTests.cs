@@ -16,7 +16,13 @@ namespace NightlyDawn.App.RenderTests;
 /// <summary>
 /// Plan §8.3: a leaf-specific render frame (not appended to <see cref="MainWindowRenderTests"/>, which stays
 /// untouched) with three rows -- a resolved display name, a hex fallback (no kind:0), and an adversarial
-/// bidi/zero-width name -- proving the third renders flat rather than reordered or hidden.
+/// bidi/zero-width name. <b>What this frame proves (carried over from §8.5/§9.6's review, plan §10.3):</b> the
+/// third row's <em>sanitized label string</em> renders as that exact string, flat. It does <b>not</b> prove
+/// sanitization prevents reordering in general -- the same frame's row body (<c>DisplayContent</c>, never
+/// sanitized) still carries the raw U+202E, and Avalonia/Skia's text layout does not apply bidi overrides
+/// either way, so a render frame cannot tell "sanitized" apart from "this renderer ignores bidi override
+/// characters." The real proof that sanitization prevents reordering is <c>AuthorLabelTests</c>'s string-level
+/// assertions on the sanitizer's output.
 /// </summary>
 public sealed class AuthorLabelRenderTests
 {

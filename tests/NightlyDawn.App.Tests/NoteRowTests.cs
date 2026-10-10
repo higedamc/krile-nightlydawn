@@ -36,6 +36,19 @@ public class NoteRowTests
     }
 
     [Theory]
+    [InlineData(NoteKind.Repost, false)]
+    [InlineData(NoteKind.GenericRepost, false)]
+    [InlineData(NoteKind.Text, true)]
+    public void CanReplyOrRepost_IsFalseForRepostKinds(NoteKind kind, bool expected)
+    {
+        // Negative control (plan §10.3 ④): the repost/generic-repost cases above are what NoteRowView binds
+        // Reply/Repost's IsEnabled to -- flipping either literal here to true would make this red.
+        var row = NoteRow.From(TestNotes.Make(1, 1, kind: kind));
+
+        Assert.Equal(expected, row.CanReplyOrRepost);
+    }
+
+    [Theory]
     [InlineData(long.MaxValue)]
     [InlineData(long.MinValue)]
     [InlineData(-1)]

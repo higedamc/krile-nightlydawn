@@ -23,4 +23,7 @@ public static class AppServices
 
     /// <summary>The profile cache the host constructed (Core's <see cref="IProfileStore"/>; the App never references <c>NightlyDawn.Nostr</c> directly for this either). Null for a designer preview or any caller that has not set it; <see cref="TimelineColumnViewModel"/> treats that the same as "nothing resolved yet" and rows fall back to the pubkey-prefix label.</summary>
     public static IProfileStore? ProfileStore { get; set; }
+
+    /// <summary>The publisher the host constructed (Core's <see cref="INotePublisher"/>; same null-tolerant pattern as <see cref="ProfileStore"/>). Null until a host wires a real implementation -- today that means <c>NightlyDawn.Nostr.Publishing.NotePublisher</c> (L3a), which this leaf does not depend on: both <see cref="App.Composing.ComposeViewModel"/> and <see cref="App.Composing.NoteRowActions"/> read this through a <c>Func&lt;INotePublisher?&gt;</c> so a host wiring it up later needs no new App-layer code.</summary>
+    public static INotePublisher? NotePublisher { get; set; }
 }

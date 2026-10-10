@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using NightlyDawn.App.Composing;
 using NightlyDawn.Core;
 
 namespace NightlyDawn.App.Timelines;
@@ -13,8 +14,12 @@ namespace NightlyDawn.App.Timelines;
 /// account-bound columns arrive with the key store (1b/1f). Every state change is marshalled
 /// through <c>postToUi</c>, so the class has no Avalonia dependency and is unit-tested with a synchronous
 /// poster. "Loading" ends on <see cref="InitialLoadComplete"/> (B6/B9), not on the first note.
+///
+/// <para>Implements <see cref="IPublishedNoteSink"/> (plan §10.1-4) so a successful post/reply/quote/repost
+/// from <see cref="ComposeViewModel"/> or <see cref="NoteRowActions"/> lands here the same way a relay-echoed
+/// note would, without waiting for that echo.</para>
 /// </summary>
-public sealed class TimelineColumnViewModel : INotifyPropertyChanged, IDisposable
+public sealed class TimelineColumnViewModel : INotifyPropertyChanged, IDisposable, IPublishedNoteSink
 {
     public const int DefaultMaxNotes = 500;
     public const string IdleStatus = "Enter a query and press Subscribe.";
@@ -23,6 +28,7 @@ public sealed class TimelineColumnViewModel : INotifyPropertyChanged, IDisposabl
     private readonly Action<Action> _postToUi;
     private readonly int _maxNotes;
     private readonly IProfileStore? _profileStore;
+    private readonly Func<Note, NoteRowActions?>? _actionsFactory;
     private readonly HashSet<string> _knownIds = new(StringComparer.Ordinal);
 
     private CancellationTokenSource? _streamCts;
@@ -34,7 +40,9 @@ public sealed class TimelineColumnViewModel : INotifyPropertyChanged, IDisposabl
 
     /// <param name="profileStore">Resolves author display names (plan §8). Null skips profile lookups entirely --
     /// rows show the pubkey-prefix fallback, same as before this leaf.</param>
-    public TimelineColumnViewModel(ITimelineSourceFactory factory, Action<Action> postToUi, int maxNotes = DefaultMaxNotes, IProfileStore? profileStore = null)
+    /// <param name="actionsFactory">Builds the per-row publish handle (plan §10.1-2). Null leaves every
+    /// row's <see cref="NoteRow.Actions"/> null -- the same as before this leaf, and the designer/sample path.</param>
+    public TimelineColumnViewModel(ITimelineSourceFactory factory, Action<Action> postToUi, int maxNotes = DefaultMaxNotes, IProfileStore? profileStore = null, Func<Note, NoteRowActions?>? actionsFactory = null)
     {
         ArgumentNullException.ThrowIfNull(factory);
         ArgumentNullException.ThrowIfNull(postToUi);
@@ -43,6 +51,7 @@ public sealed class TimelineColumnViewModel : INotifyPropertyChanged, IDisposabl
         _postToUi = postToUi;
         _maxNotes = maxNotes;
         _profileStore = profileStore;
+        _actionsFactory = actionsFactory;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -125,6 +134,28 @@ public sealed class TimelineColumnViewModel : INotifyPropertyChanged, IDisposabl
         _disposed = true;
         CancelCurrentStream();
     }
+
+    /// <summary>
+    /// <see cref="IPublishedNoteSink.NotePublished"/>: inserts the just-published note optimistically (plan
+    /// §10.1-4), before any relay echoes it back through the subscription, and reports how many relays
+    /// accepted it. Marshals to the UI thread itself (like <see cref="ReportStatus"/>) rather than requiring
+    /// the caller to already be on it: <see cref="NoteRowActions"/> awaits <see cref="INotePublisher"/> with
+    /// <c>ConfigureAwait(false)</c>, so its continuation -- and this call -- can land on a thread-pool thread,
+    /// not necessarily the one that dispatched the click.
+    /// </summary>
+    public void NotePublished(Note note, PublishResult result) =>
+        _postToUi(() =>
+        {
+            AddNote(note);
+            var accepted = result.Outcomes.Count(o => o.Accepted);
+            Status = $"Posted · {accepted}/{result.Outcomes.Count} relays accepted.";
+        });
+
+    /// <summary>Lets a row action (Repost/React) report a result without touching <see cref="Notes"/> (plan
+    /// §10.1-1: results live in <see cref="Status"/>, not on the row). Marshals to the UI thread itself, so
+    /// callers -- which run on whatever thread an <c>async void</c> click handler's continuation lands on --
+    /// do not need their own dispatcher plumbing.</summary>
+    public void ReportStatus(string message) => _postToUi(() => Status = message);
 
     /// <summary>Cap on a live (post-initial-load) profile lookup: a silent relay must not stall the note
     /// stream waiting for a kind:0 that may never arrive.</summary>
@@ -305,7 +336,7 @@ public sealed class TimelineColumnViewModel : INotifyPropertyChanged, IDisposabl
             return; // The same event can arrive from several relays (B7); show it once.
         }
 
-        var row = NoteRow.From(note, _profileStore?.TryGet(note.AuthorPubkey));
+        var row = NoteRow.From(note, _profileStore?.TryGet(note.AuthorPubkey), actions: _actionsFactory?.Invoke(note));
         var index = 0;
         while (index < Notes.Count && Notes[index].CreatedAt >= row.CreatedAt)
         {
