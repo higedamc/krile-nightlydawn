@@ -11,8 +11,9 @@ public sealed partial class ComposeBoxView : UserControl
 
     private ComposeViewModel? ViewModel => DataContext as ComposeViewModel;
 
-    // async void: ComposeViewModel.PostAsync never lets an exception escape (plan §10.1-3; it catches both
-    // documented INotePublisher failure modes itself), so there is nothing left for this handler to catch.
+    // async void: ComposeViewModel.PostAsync never lets an exception escape -- it catches INotePublisher's two
+    // documented failure modes (ArgumentException, EventPublishException) plus a trailing catch (Exception)
+    // for everything else (plan §10.4-2), so there is nothing left for this handler to catch.
     private async void OnPostClick(object? sender, RoutedEventArgs e) => await (ViewModel?.PostAsync() ?? Task.CompletedTask);
 
     private void OnCancelTargetClick(object? sender, RoutedEventArgs e) => ViewModel?.CancelTargeting();

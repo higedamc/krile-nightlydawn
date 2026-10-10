@@ -47,6 +47,21 @@ public class NoteRowActionsTests
     }
 
     [Fact]
+    public async Task RepostAsync_OnAnUndocumentedPublisherException_DoesNotThrow_AndReportsTheTypeName()
+    {
+        // Negative control (plan §10.4-2): delete the trailing catch (Exception) in RepostAsync and this
+        // throws out of the test instead of recording a status -- the same way SignerUnavailableException
+        // currently escapes into Avalonia's async-void click handler before a key is ever unlocked.
+        var (actions, publisher, sink, _, statuses) = New();
+        publisher.RejectWith = new SignerUnavailableException("No local key is active.");
+
+        await actions.RepostAsync();
+
+        Assert.Equal("Repost failed: SignerUnavailableException.", Assert.Single(statuses));
+        Assert.Empty(sink.Published);
+    }
+
+    [Fact]
     public async Task RepostAsync_CalledTwiceWithoutAwaitingTheFirst_PublishesOnlyOnce()
     {
         // Negative control (plan §10.3 ②): removing the _repostBusy guard makes publisher.CallCount come back
@@ -78,6 +93,19 @@ public class NoteRowActionsTests
         Assert.Equal("React", call.Method);
         Assert.Equal("+", call.Content);
         Assert.Equal("Reacted · 1/1 relays accepted.", Assert.Single(statuses));
+    }
+
+    [Fact]
+    public async Task ReactAsync_OnAnUndocumentedPublisherException_DoesNotThrow_AndReportsTheTypeName()
+    {
+        // Negative control (plan §10.4-2): same reasoning as RepostAsync's equivalent test above.
+        var (actions, publisher, sink, _, statuses) = New();
+        publisher.RejectWith = new SignerUnavailableException("No local key is active.");
+
+        await actions.ReactAsync();
+
+        Assert.Equal("Reaction failed: SignerUnavailableException.", Assert.Single(statuses));
+        Assert.Empty(sink.Published);
     }
 
     [Fact]

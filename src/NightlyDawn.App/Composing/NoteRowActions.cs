@@ -13,10 +13,13 @@ namespace NightlyDawn.App.Composing;
 /// -- replying or quoting needs the user to type something, so there is nothing this class can send on its
 /// own. <see cref="RepostAsync"/>/<see cref="ReactAsync"/> publish immediately: no text, nothing to type.</para>
 ///
-/// <para>Every publisher call is caught here (plan §10.1-3: <see cref="ArgumentException"/> and
-/// <see cref="EventPublishException"/> are the documented failure modes of <see cref="INotePublisher"/>), so
-/// the Avalonia <c>async void</c> click handler that calls into this class never needs its own try/catch --
-/// nothing it could observe would otherwise escape and take the process down.</para>
+/// <para>Every publisher call is caught here (plan §10.4-2): <see cref="ArgumentException"/> and
+/// <see cref="EventPublishException"/> are <see cref="INotePublisher"/>'s documented failure modes, but a
+/// trailing <c>catch (Exception)</c> covers everything else too -- e.g. <c>SignerUnavailableException</c>
+/// before a key is unlocked (the state the app launches in) or a relay-layer <c>RelayConnectionException</c>
+/// before any accept/reject outcome exists to report. That catch-all surfaces only
+/// <see cref="object.GetType"/>'s name, never the exception's message, so the Avalonia <c>async void</c> click
+/// handler that calls into this class still never needs its own try/catch.</para>
 /// </summary>
 public sealed class NoteRowActions(
     Note note,
@@ -62,6 +65,13 @@ public sealed class NoteRowActions(
         {
             setStatus($"Repost failed: 0 of {ex.Result.Outcomes.Count} relays accepted.");
         }
+        catch (Exception ex)
+        {
+            // Type name only (plan §10.4-2), same convention as TimelineColumnViewModel's status line --
+            // e.g. SignerUnavailableException before a key is unlocked, or RelayConnectionException on a
+            // socket failure that never reaches an accept/reject outcome.
+            setStatus($"Repost failed: {ex.GetType().Name}.");
+        }
         finally
         {
             _repostBusy = false;
@@ -103,6 +113,11 @@ public sealed class NoteRowActions(
         catch (EventPublishException ex)
         {
             setStatus($"Reaction failed: 0 of {ex.Result.Outcomes.Count} relays accepted.");
+        }
+        catch (Exception ex)
+        {
+            // Type name only (plan §10.4-2); same reasoning as RepostAsync's catch-all above.
+            setStatus($"Reaction failed: {ex.GetType().Name}.");
         }
         finally
         {

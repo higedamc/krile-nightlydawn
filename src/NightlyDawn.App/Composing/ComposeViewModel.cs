@@ -182,6 +182,15 @@ public sealed class ComposeViewModel(Func<INotePublisher?> publisher, Func<IPubl
         {
             Post(() => Status = $"Publish failed: 0 of {ex.Result.Outcomes.Count} relays accepted.");
         }
+        catch (Exception ex)
+        {
+            // Type name only (plan §10.4-2), same convention as TimelineColumnViewModel's status line -- e.g.
+            // SignerUnavailableException before a key is unlocked, or RelayConnectionException on a socket
+            // failure that never reaches an accept/reject outcome. Without this, Status is left stuck on the
+            // "Posting…"/"Replying…"/"Quoting…" set above, every byte of Content survives (the catch below
+            // never runs), and only the finally's IsBusy reset distinguishes "failed silently" from "still busy".
+            Post(() => Status = $"Post failed: {ex.GetType().Name}.");
+        }
         finally
         {
             Post(() => IsBusy = false);
