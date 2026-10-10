@@ -1,3 +1,4 @@
+using System.Text;
 using NightlyDawn.Core;
 using NightlyDawn.Nostr.Publishing;
 using NightlyDawn.Nostr.Tests.Fakes;
@@ -60,21 +61,52 @@ public sealed class NotePublisherTests
     }
 
     [Fact]
-    public async Task PostNoteAsync_RejectsContentOverMaxLength()
+    public async Task PostNoteAsync_RejectsContentOverMaxBytes()
     {
-        var tooLong = new string('x', NotePublisher.MaxContentLength + 1);
+        var tooLong = new string('x', NotePublisher.MaxContentBytes + 1);
 
         var ex = await Assert.ThrowsAsync<ArgumentException>(() => _sut.PostNoteAsync(tooLong));
-        Assert.Contains(NotePublisher.MaxContentLength.ToString(), ex.Message);
+        Assert.Contains(NotePublisher.MaxContentBytes.ToString(), ex.Message);
         Assert.Empty(_backend.PublishedEvents);
     }
 
     [Fact]
-    public async Task PostNoteAsync_AllowsContentAtExactlyMaxLength()
+    public async Task PostNoteAsync_AllowsAsciiContentAtExactlyMaxBytes()
     {
-        var exact = new string('x', NotePublisher.MaxContentLength);
+        var exact = new string('x', NotePublisher.MaxContentBytes);
 
         await _sut.PostNoteAsync(exact);
+
+        Assert.Single(_backend.PublishedEvents);
+    }
+
+    [Fact]
+    public async Task PostNoteAsync_RejectsACjkBody_UnderTheRetiredCharCapButOverTheByteCap()
+    {
+        // Plan §9.5 blocking ①: every char here is a 3-byte CJK ideograph, so 50,000 of them is under the
+        // retired 65,536-*character* cap but 150,000 UTF-8 bytes -- well over MaxContentBytes (126,976). A
+        // char-counting guard would have let this through and had every relay reject it post-signing.
+        const int charCount = 50_000;
+        var cjk = new string('漢', charCount);
+        Assert.True(charCount <= 65_536);
+        Assert.True(Encoding.UTF8.GetByteCount(cjk) > NotePublisher.MaxContentBytes);
+
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() => _sut.PostNoteAsync(cjk));
+        Assert.Contains("UTF-8 bytes", ex.Message);
+        Assert.Empty(_backend.PublishedEvents);
+    }
+
+    [Fact]
+    public async Task PostNoteAsync_AllowsAnAsciiBody_AtTheSameCharCountTheCjkBodyAboveWasRejectedAt()
+    {
+        // Same 50,000 *characters* as the CJK test above, but ASCII is 1 byte/char so this body is 50,000
+        // UTF-8 bytes -- comfortably under MaxContentBytes. This is the asymmetry the old char-count guard
+        // missed: the exact same "how much did I type" produces a passing body in one language and a
+        // rejected one in another.
+        var ascii = new string('x', 50_000);
+        Assert.True(Encoding.UTF8.GetByteCount(ascii) <= NotePublisher.MaxContentBytes);
+
+        await _sut.PostNoteAsync(ascii);
 
         Assert.Single(_backend.PublishedEvents);
     }
@@ -296,6 +328,53 @@ public sealed class NotePublisherTests
     {
         await Assert.ThrowsAsync<ArgumentException>(() => _sut.ReactAsync(TextNote(), content));
         Assert.Empty(_backend.PublishedEvents);
+    }
+
+    // Plan §9.5 blocking ②: these all slipped past the old Rune.IsControl-only check (C0/C1 only) and past
+    // IsNullOrWhiteSpace (which only catches U+2028/U+2029 when they are the *entire* string, not embedded).
+    // Built with char.ConvertFromUtf32 rather than pasted literally -- an invisible/bidi character sitting
+    // directly in this source file would make the file itself unreviewable.
+    [Theory]
+    [InlineData(0x202E)] // RIGHT-TO-LEFT OVERRIDE
+    [InlineData(0x202D)] // LEFT-TO-RIGHT OVERRIDE
+    [InlineData(0x2066)] // LEFT-TO-RIGHT ISOLATE
+    [InlineData(0x200F)] // RIGHT-TO-LEFT MARK
+    [InlineData(0x061C)] // ARABIC LETTER MARK
+    [InlineData(0x2028)] // LINE SEPARATOR
+    [InlineData(0x2029)] // PARAGRAPH SEPARATOR
+    [InlineData(0x200B)] // ZERO WIDTH SPACE
+    [InlineData(0xFEFF)] // ZERO WIDTH NO-BREAK SPACE / BOM
+    [InlineData(0x180E)] // MONGOLIAN VOWEL SEPARATOR
+    public async Task ReactAsync_RejectsEmbeddedBidiOrZeroWidthCharacters(int codepoint)
+    {
+        var content = "+" + char.ConvertFromUtf32(codepoint) + "x";
+
+        await Assert.ThrowsAsync<ArgumentException>(() => _sut.ReactAsync(TextNote(), content));
+        Assert.Empty(_backend.PublishedEvents);
+    }
+
+    // Negative control for the fix above: ZWJ/ZWNJ must stay allowed. Reactions are exactly where real
+    // emoji (ZWJ sequences) and Indic/Arabic orthography (ZWNJ) show up, so blocking them would be the
+    // over-blocking failure mode this fix is not supposed to introduce.
+    [Fact]
+    public async Task ReactAsync_StillAllowsZwjFamilyEmoji()
+    {
+        var zwj = char.ConvertFromUtf32(0x200D);
+        var zwjFamily = char.ConvertFromUtf32(0x1F468) + zwj + char.ConvertFromUtf32(0x1F469) + zwj + char.ConvertFromUtf32(0x1F467);
+
+        await _sut.ReactAsync(TextNote(), zwjFamily);
+
+        Assert.Equal(zwjFamily, _backend.PublishedEvents.Single().Content);
+    }
+
+    [Fact]
+    public async Task ReactAsync_StillAllowsZwnjArabicText()
+    {
+        var zwnjArabic = char.ConvertFromUtf32(0x0646) + char.ConvertFromUtf32(0x200C) + char.ConvertFromUtf32(0x0627);
+
+        await _sut.ReactAsync(TextNote(), zwnjArabic);
+
+        Assert.Equal(zwnjArabic, _backend.PublishedEvents.Single().Content);
     }
 
     [Fact]
