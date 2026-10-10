@@ -125,8 +125,14 @@ SELFSHOT_STATUS=$?
 echo "self-screenshot run exit status: $SELFSHOT_STATUS" | tee -a "$RESULT"
 EVIDENCE_I=1
 if [ -s "$OUT/app-side.png" ]; then
-  echo "RESULT (i) app-side RenderTargetBitmap: PASS -- $(wc -c < "$OUT/app-side.png") bytes" | tee -a "$RESULT"
-  EVIDENCE_I=0
+  COLORS_I=$(identify -format "%k" "$OUT/app-side.png" 2>>"$OUT/app-selfshot.log" || echo 0)
+  echo "app-side.png distinct colors: $COLORS_I" | tee -a "$RESULT"
+  if [ "$COLORS_I" -ge "$MIN_DISTINCT_COLORS" ] 2>/dev/null; then
+    echo "RESULT (i) app-side RenderTargetBitmap: PASS -- $(wc -c < "$OUT/app-side.png") bytes, $COLORS_I distinct colors" | tee -a "$RESULT"
+    EVIDENCE_I=0
+  else
+    echo "RESULT (i) app-side RenderTargetBitmap: FAIL -- only $COLORS_I distinct color(s); layout rendered blank/uniform" | tee -a "$RESULT"
+  fi
 else
   echo "RESULT (i) app-side RenderTargetBitmap: FAIL -- see app-selfshot.log" | tee -a "$RESULT"
 fi
