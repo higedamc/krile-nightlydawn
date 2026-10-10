@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NightlyDawn.Core;
 using NightlyDawn.Nostr.Profiles;
+using NightlyDawn.Nostr.Publishing;
 using NightlyDawn.Nostr.Relay;
 
 namespace NightlyDawn.Nostr.Timelines;
@@ -9,7 +10,9 @@ namespace NightlyDawn.Nostr.Timelines;
 /// <summary>
 /// The relay-backed <see cref="ITimelineSourceFactory"/> (leaf 1e-b). Owns (or borrows) one <see cref="NostrBackend"/>,
 /// connects it lazily on the first stream, and compiles each column's query through <see cref="ITimelineQueryCompiler"/>.
-/// Read-only: nothing here signs or publishes. <see cref="Create"/> currently ignores the account — account-bound
+/// The timeline side is read-only — nothing on the <see cref="Create"/> path signs anything, and no key store is
+/// needed to stream public notes. Signing enters only through <see cref="CreatePublisher"/>, which the host calls
+/// separately and hands its own key store (L3c). <see cref="Create"/> currently ignores the account — account-bound
 /// sources (home = follows, mentions) arrive with the key store and the 1f wiring.
 /// </summary>
 public sealed class NostrTimelineSourceFactory : ITimelineSourceFactory, IAsyncDisposable
@@ -64,6 +67,33 @@ public sealed class NostrTimelineSourceFactory : ITimelineSourceFactory, IAsyncD
     /// <summary>Shares this factory's backend connection rather than opening a second one (plan §8): the host
     /// hands this to <c>AppServices.ProfileStore</c> alongside the timeline source factory itself.</summary>
     public IProfileStore ProfileStore { get; }
+
+    /// <summary>
+    /// Builds the publisher over <em>this</em> factory's backend, so posting and reading share one relay pool
+    /// and one connection (plan §10, L3c) — the same arrangement as <see cref="ProfileStore"/>. The host hands
+    /// the result to <c>AppServices.NotePublisher</c>; the App layer only ever sees Core's
+    /// <see cref="INotePublisher"/> (B9).
+    ///
+    /// <para>The returned publisher connects the pool on its first publish
+    /// (<see cref="ConnectOnDemandBackend"/>): this factory connects lazily on the first timeline stream, and
+    /// publishing is not a stream, so without that step a post sent before the first column connected would
+    /// fail as a connectivity error against a pool that was never dialled.</para>
+    ///
+    /// <para>Exists here rather than on <see cref="ITimelineSourceFactory"/> because only the host calls it,
+    /// and the host already references this assembly. Putting it on the Core interface would oblige every
+    /// factory — including <c>SampleTimelineSourceFactory</c>, which has no keys and no relays — to answer a
+    /// question it has no business answering.</para>
+    /// </summary>
+    /// <param name="keyStore">Signs every event this publisher sends. The timeline never consults it.</param>
+    public INotePublisher CreatePublisher(IKeyStore keyStore)
+    {
+        ArgumentNullException.ThrowIfNull(keyStore);
+        return new NotePublisher(
+            new ConnectOnDemandBackend(_backend, EnsureConnectedAsync),
+            keyStore,
+            _backend.Mapper,
+            TimeProvider.System);
+    }
 
     /// <summary>Read-only for now: the account is not consulted. See the class summary.</summary>
     public ITimelineSource Create(Timeline timeline, Account account) => CreateAnonymous(timeline);

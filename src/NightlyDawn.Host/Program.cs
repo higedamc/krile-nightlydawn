@@ -61,6 +61,12 @@ internal static class Program
             Console.Error.WriteLine($"[NightlyDawn] key store unavailable: {ex.GetType().Name}");
         }
 
+        // Publishing shares the timeline's backend and relay pool (L3c). No key store means no publisher: the App
+        // layer reads AppServices.NotePublisher through a Func<INotePublisher?> and reports publishing as
+        // unavailable, which is a truer thing to show than a signing failure after the user has typed.
+        AppServices.NotePublisher = PublisherWiring.Create(timelineSourceFactory, AppServices.KeyStore);
+        Console.Error.WriteLine($"[NightlyDawn] publishing: {(AppServices.NotePublisher is null ? "unavailable (no key store)" : "ready")}");
+
         try
         {
             return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
