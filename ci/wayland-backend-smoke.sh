@@ -59,9 +59,11 @@ trap cleanup EXIT
 if [ "$COMPOSITOR" = "cage" ]; then
   # cage runs exactly one client and exits when it exits, so give it a long-lived dummy client (`sleep`)
   # and connect our own app/grim to the same socket as *additional* clients instead.
-  timeout 60 cage -d -- sleep 50 > "$OUT/compositor.log" 2>&1 &
+  # Must outlive: socket-wait (up to 20s) + settle (2s) + app warmup (3s) + grim poll (up to 30s) +
+  # evidence (i)'s own run (up to 20s) -- comfortable margin at 120s.
+  timeout 120 cage -d -- sleep 110 > "$OUT/compositor.log" 2>&1 &
 else
-  timeout 60 sway > "$OUT/compositor.log" 2>&1 &
+  timeout 120 sway > "$OUT/compositor.log" 2>&1 &
 fi
 COMPOSITOR_PID=$!
 
@@ -92,23 +94,43 @@ sleep 3
 # CaptureRenderedFrame -- a uniform black/blank PNG from a compositor that never actually presented a
 # window is a few KB too, grim exits 0, and this is precisely the gap this leaf exists to close). Count
 # distinct colors instead.
+#
+# One grim shot after a fixed sleep is a race, confirmed in practice (Lead, PR #17): two runs with the
+# identical software-render fix split 1 PASS / 1 FAIL, no crash in compositor.log either time -- llvmpipe
+# is slow, and the first frame isn't always composited within a fixed wait. Poll for up to 30s instead of
+# guessing a sleep duration, and record how many seconds it actually took so a slow-but-working compositor
+# is distinguishable from one that never presents anything.
 MIN_DISTINCT_COLORS=8
+POLL_INTERVAL_SECONDS=1
+POLL_TIMEOUT_SECONDS=30
 EVIDENCE_II=1
 if command -v grim >/dev/null 2>&1; then
-  grim "$OUT/compositor-side.png" 2> "$OUT/grim.log"
-  GRIM_STATUS=$?
-  echo "grim exit status: $GRIM_STATUS" | tee -a "$RESULT"
-  if [ "$GRIM_STATUS" -eq 0 ] && [ -s "$OUT/compositor-side.png" ]; then
-    COLORS=$(identify -format "%k" "$OUT/compositor-side.png" 2>>"$OUT/grim.log" || echo 0)
-    echo "compositor-side.png distinct colors: $COLORS" | tee -a "$RESULT"
-    if [ "$COLORS" -ge "$MIN_DISTINCT_COLORS" ] 2>/dev/null; then
-      echo "RESULT (ii) compositor-side capture: PASS -- $(wc -c < "$OUT/compositor-side.png") bytes, $COLORS distinct colors" | tee -a "$RESULT"
-      EVIDENCE_II=0
-    else
-      echo "RESULT (ii) compositor-side capture: FAIL -- only $COLORS distinct color(s); looks blank/uniform, no window was actually presented" | tee -a "$RESULT"
+  START_TS=$(date +%s)
+  COLORS=0
+  while :; do
+    ELAPSED=$(( $(date +%s) - START_TS ))
+    grim "$OUT/compositor-side.png" 2> "$OUT/grim.log"
+    GRIM_STATUS=$?
+    COLORS=0
+    if [ "$GRIM_STATUS" -eq 0 ] && [ -s "$OUT/compositor-side.png" ]; then
+      COLORS=$(identify -format "%k" "$OUT/compositor-side.png" 2>>"$OUT/grim.log" || echo 0)
     fi
+    echo "grim poll at ${ELAPSED}s: exit=$GRIM_STATUS distinct_colors=$COLORS" | tee -a "$RESULT"
+    if [ "$COLORS" -ge "$MIN_DISTINCT_COLORS" ] 2>/dev/null; then
+      echo "compositor-side.png became non-uniform after ${ELAPSED}s" | tee -a "$RESULT"
+      break
+    fi
+    if [ "$ELAPSED" -ge "$POLL_TIMEOUT_SECONDS" ]; then
+      echo "compositor-side.png still uniform after ${POLL_TIMEOUT_SECONDS}s of polling, giving up" | tee -a "$RESULT"
+      break
+    fi
+    sleep "$POLL_INTERVAL_SECONDS"
+  done
+  if [ "$COLORS" -ge "$MIN_DISTINCT_COLORS" ] 2>/dev/null; then
+    echo "RESULT (ii) compositor-side capture: PASS -- $(wc -c < "$OUT/compositor-side.png") bytes, $COLORS distinct colors, settled after ${ELAPSED}s" | tee -a "$RESULT"
+    EVIDENCE_II=0
   else
-    echo "RESULT (ii) compositor-side capture: FAIL -- see grim.log and compositor.log" | tee -a "$RESULT"
+    echo "RESULT (ii) compositor-side capture: FAIL -- only $COLORS distinct color(s) after ${POLL_TIMEOUT_SECONDS}s of polling; looks blank/uniform, no window was actually presented" | tee -a "$RESULT"
   fi
 else
   echo "RESULT (ii) compositor-side capture: SKIPPED -- grim not installed" | tee -a "$RESULT"

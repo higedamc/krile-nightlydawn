@@ -32,7 +32,9 @@ cleanup() {
 }
 trap cleanup EXIT
 
-timeout 60 Xvfb "$DISPLAY" -screen 0 1280x800x24 > "$OUT/xvfb.log" 2>&1 &
+# Must outlive: readiness-wait (up to 20s) + settle (1s) + app warmup (3s) + import poll (up to 30s) +
+# evidence (i)'s own run (up to 20s) -- comfortable margin at 120s.
+timeout 120 Xvfb "$DISPLAY" -screen 0 1280x800x24 > "$OUT/xvfb.log" 2>&1 &
 XVFB_PID=$!
 
 READY=1
@@ -56,24 +58,40 @@ APP_PID=$!
 sleep 3
 
 # A file existing and being non-empty is not an assertion -- count distinct colors, same as the wayland
-# script, so a root window that is just empty Xvfb background (no window ever mapped) cannot pass.
+# script, so a root window that is just empty Xvfb background (no window ever mapped) cannot pass. Same
+# polling shape as wayland too: this script hasn't shown the race in practice (3/3 green so far), but it
+# has the identical "shoot once after a fixed sleep" structure, so it carries the identical risk.
 MIN_DISTINCT_COLORS=8
+POLL_INTERVAL_SECONDS=1
+POLL_TIMEOUT_SECONDS=30
 EVIDENCE_II=1
 if command -v import >/dev/null 2>&1; then
-  import -display "$DISPLAY" -window root "$OUT/compositor-side.png" 2> "$OUT/import.log"
-  IMPORT_STATUS=$?
-  echo "import exit status: $IMPORT_STATUS" | tee -a "$RESULT"
-  if [ "$IMPORT_STATUS" -eq 0 ] && [ -s "$OUT/compositor-side.png" ]; then
-    COLORS=$(identify -format "%k" "$OUT/compositor-side.png" 2>>"$OUT/import.log" || echo 0)
-    echo "compositor-side.png distinct colors: $COLORS" | tee -a "$RESULT"
-    if [ "$COLORS" -ge "$MIN_DISTINCT_COLORS" ] 2>/dev/null; then
-      echo "RESULT (ii) X-server-side capture: PASS -- $(wc -c < "$OUT/compositor-side.png") bytes, $COLORS distinct colors" | tee -a "$RESULT"
-      EVIDENCE_II=0
-    else
-      echo "RESULT (ii) X-server-side capture: FAIL -- only $COLORS distinct color(s); looks blank/uniform, no window was actually mapped" | tee -a "$RESULT"
+  START_TS=$(date +%s)
+  COLORS=0
+  while :; do
+    ELAPSED=$(( $(date +%s) - START_TS ))
+    import -display "$DISPLAY" -window root "$OUT/compositor-side.png" 2> "$OUT/import.log"
+    IMPORT_STATUS=$?
+    COLORS=0
+    if [ "$IMPORT_STATUS" -eq 0 ] && [ -s "$OUT/compositor-side.png" ]; then
+      COLORS=$(identify -format "%k" "$OUT/compositor-side.png" 2>>"$OUT/import.log" || echo 0)
     fi
+    echo "import poll at ${ELAPSED}s: exit=$IMPORT_STATUS distinct_colors=$COLORS" | tee -a "$RESULT"
+    if [ "$COLORS" -ge "$MIN_DISTINCT_COLORS" ] 2>/dev/null; then
+      echo "compositor-side.png became non-uniform after ${ELAPSED}s" | tee -a "$RESULT"
+      break
+    fi
+    if [ "$ELAPSED" -ge "$POLL_TIMEOUT_SECONDS" ]; then
+      echo "compositor-side.png still uniform after ${POLL_TIMEOUT_SECONDS}s of polling, giving up" | tee -a "$RESULT"
+      break
+    fi
+    sleep "$POLL_INTERVAL_SECONDS"
+  done
+  if [ "$COLORS" -ge "$MIN_DISTINCT_COLORS" ] 2>/dev/null; then
+    echo "RESULT (ii) X-server-side capture: PASS -- $(wc -c < "$OUT/compositor-side.png") bytes, $COLORS distinct colors, settled after ${ELAPSED}s" | tee -a "$RESULT"
+    EVIDENCE_II=0
   else
-    echo "RESULT (ii) X-server-side capture: FAIL -- see import.log" | tee -a "$RESULT"
+    echo "RESULT (ii) X-server-side capture: FAIL -- only $COLORS distinct color(s) after ${POLL_TIMEOUT_SECONDS}s of polling; looks blank/uniform, no window was actually mapped" | tee -a "$RESULT"
   fi
 else
   echo "RESULT (ii) X-server-side capture: SKIPPED -- ImageMagick's import not installed" | tee -a "$RESULT"
