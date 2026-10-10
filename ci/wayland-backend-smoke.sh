@@ -40,6 +40,14 @@ XDG_RUNTIME_DIR=$(mktemp -d)
 chmod 700 "$XDG_RUNTIME_DIR"
 export WLR_BACKENDS=headless
 export WLR_LIBINPUT_NO_DEVICES=1
+# Variable #1 of the single-variable experiment (Lead, PR #17 review): the runner has no GPU
+# ("Failed to find any DRM render node" in compositor.log on the first run). These are the documented
+# wlroots/Mesa software-rendering escape hatches. If the compositor-side capture is still uniform after
+# this, the next single-variable step is swapping cage for sway (cage is a single-client kiosk; sway
+# compositors every client, which may matter for a window opened by a process other than cage's own child).
+export WLR_RENDERER=pixman
+export LIBGL_ALWAYS_SOFTWARE=1
+export GALLIUM_DRIVER=llvmpipe
 
 COMPOSITOR_PID=""
 cleanup() {
@@ -80,14 +88,25 @@ NIGHTLYDAWN_BACKEND=wayland dotnet "$HOST_DLL" > "$OUT/app-longrun.log" 2>&1 &
 APP_PID=$!
 sleep 3
 
+# A file existing and being non-empty is not an assertion (the same mistake layer 1's brief called out for
+# CaptureRenderedFrame -- a uniform black/blank PNG from a compositor that never actually presented a
+# window is a few KB too, grim exits 0, and this is precisely the gap this leaf exists to close). Count
+# distinct colors instead.
+MIN_DISTINCT_COLORS=8
 EVIDENCE_II=1
 if command -v grim >/dev/null 2>&1; then
   grim "$OUT/compositor-side.png" 2> "$OUT/grim.log"
   GRIM_STATUS=$?
   echo "grim exit status: $GRIM_STATUS" | tee -a "$RESULT"
   if [ "$GRIM_STATUS" -eq 0 ] && [ -s "$OUT/compositor-side.png" ]; then
-    echo "RESULT (ii) compositor-side capture: PASS -- $(wc -c < "$OUT/compositor-side.png") bytes" | tee -a "$RESULT"
-    EVIDENCE_II=0
+    COLORS=$(identify -format "%k" "$OUT/compositor-side.png" 2>>"$OUT/grim.log" || echo 0)
+    echo "compositor-side.png distinct colors: $COLORS" | tee -a "$RESULT"
+    if [ "$COLORS" -ge "$MIN_DISTINCT_COLORS" ] 2>/dev/null; then
+      echo "RESULT (ii) compositor-side capture: PASS -- $(wc -c < "$OUT/compositor-side.png") bytes, $COLORS distinct colors" | tee -a "$RESULT"
+      EVIDENCE_II=0
+    else
+      echo "RESULT (ii) compositor-side capture: FAIL -- only $COLORS distinct color(s); looks blank/uniform, no window was actually presented" | tee -a "$RESULT"
+    fi
   else
     echo "RESULT (ii) compositor-side capture: FAIL -- see grim.log and compositor.log" | tee -a "$RESULT"
   fi

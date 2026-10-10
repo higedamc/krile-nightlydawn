@@ -55,14 +55,23 @@ NIGHTLYDAWN_BACKEND=x11 dotnet "$HOST_DLL" > "$OUT/app-longrun.log" 2>&1 &
 APP_PID=$!
 sleep 3
 
+# A file existing and being non-empty is not an assertion -- count distinct colors, same as the wayland
+# script, so a root window that is just empty Xvfb background (no window ever mapped) cannot pass.
+MIN_DISTINCT_COLORS=8
 EVIDENCE_II=1
 if command -v import >/dev/null 2>&1; then
   import -display "$DISPLAY" -window root "$OUT/compositor-side.png" 2> "$OUT/import.log"
   IMPORT_STATUS=$?
   echo "import exit status: $IMPORT_STATUS" | tee -a "$RESULT"
   if [ "$IMPORT_STATUS" -eq 0 ] && [ -s "$OUT/compositor-side.png" ]; then
-    echo "RESULT (ii) X-server-side capture: PASS -- $(wc -c < "$OUT/compositor-side.png") bytes" | tee -a "$RESULT"
-    EVIDENCE_II=0
+    COLORS=$(identify -format "%k" "$OUT/compositor-side.png" 2>>"$OUT/import.log" || echo 0)
+    echo "compositor-side.png distinct colors: $COLORS" | tee -a "$RESULT"
+    if [ "$COLORS" -ge "$MIN_DISTINCT_COLORS" ] 2>/dev/null; then
+      echo "RESULT (ii) X-server-side capture: PASS -- $(wc -c < "$OUT/compositor-side.png") bytes, $COLORS distinct colors" | tee -a "$RESULT"
+      EVIDENCE_II=0
+    else
+      echo "RESULT (ii) X-server-side capture: FAIL -- only $COLORS distinct color(s); looks blank/uniform, no window was actually mapped" | tee -a "$RESULT"
+    fi
   else
     echo "RESULT (ii) X-server-side capture: FAIL -- see import.log" | tee -a "$RESULT"
   fi

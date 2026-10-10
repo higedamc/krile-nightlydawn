@@ -71,16 +71,16 @@ jobs:
             fi
           done
 
+      # No continue-on-error here (job-level continue-on-error above already keeps a red result from
+      # blocking a PR): a real FAIL must show red on the step, or it is invisible in the checks summary.
       - name: Wayland backend smoke (NIGHTLYDAWN_BACKEND=wayland)
         run: bash ci/wayland-backend-smoke.sh
-        continue-on-error: true
         env:
           NIGHTLYDAWN_RELAYS: wss://127.0.0.1:1
 
       - name: X11 backend smoke (NIGHTLYDAWN_BACKEND=x11, via Xvfb)
         if: always()
         run: bash ci/x11-backend-smoke.sh
-        continue-on-error: true
         env:
           NIGHTLYDAWN_RELAYS: wss://127.0.0.1:1
 
