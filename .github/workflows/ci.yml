@@ -33,6 +33,25 @@ jobs:
           path: tests/NightlyDawn.App.RenderTests/bin/Release/net8.0/RenderFrames/*.png
           if-no-files-found: error
 
+  # Solution-wide on purpose. `dotnet format` on a single project cannot see a violation in a project it
+  # was not pointed at, so the per-project checks everyone was running locally let 104 `error WHITESPACE`
+  # findings into master with the L5 leaf while every PR reported "format clean". `dotnet restore` runs as
+  # its own step and format runs with --no-restore: without a prior restore, `dotnet format` exits 1 with
+  # `Restore operation failed`, which is indistinguishable from a real violation.
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - run: dotnet restore NightlyDawn.sln
+
+      - name: dotnet format (solution-wide, verify only)
+        run: dotnet format NightlyDawn.sln --verify-no-changes --no-restore
+
   # Experiment, not a regression gate (plan: PLANS/KRILE_WAYLAND_BACKEND_SMOKE_LEAF.md). Avalonia.Headless
   # (the render-frames job above) never loads Avalonia.Wayland, so it proves nothing about whether the real
   # backend can start at all -- this job is the only thing that does. continue-on-error so a red result here
