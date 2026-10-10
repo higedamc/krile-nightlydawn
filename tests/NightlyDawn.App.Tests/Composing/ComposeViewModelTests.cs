@@ -171,6 +171,30 @@ public class ComposeViewModelTests
         Assert.False(vm.HasTarget);
     }
 
+    [Fact]
+    public async Task PostAsync_OnSuccess_DoesNotClearTextTypedWhileTheCallWasInFlight()
+    {
+        // Negative control (non-blocking ③ from PR #24 review): revert the fix to an unconditional
+        // `Content = string.Empty;` in RunAsync's success continuation and this fails -- the appended text
+        // typed during the round trip is gone instead of surviving alongside the cleared "hello nostr".
+        //
+        // The TextBox has no IsEnabled binding (only the Post button does -- see ComposeBoxView.axaml), so a
+        // real round trip always has this gap: Gate reproduces it by suspending the fake's call until this
+        // test resumes it, matching the real NotePublisher's signing + relay round trip.
+        var publisher = new FakeNotePublisher { Gate = new TaskCompletionSource() };
+        var sink = new FakePublishedNoteSink();
+        var vm = NewViewModel(publisher, sink);
+        vm.Content = "hello nostr";
+
+        var post = vm.PostAsync();
+        vm.Content += " and more"; // typed while the call above is still suspended on Gate
+        publisher.Gate.SetResult();
+        await post;
+
+        Assert.Equal("hello nostr and more", vm.Content);
+        Assert.Equal("Posted · 1/1 relays accepted.", vm.Status);
+    }
+
     /// <summary>Defers every posted action until <see cref="Release"/>, so a test can call <see cref="ComposeViewModel.PostAsync"/>
     /// twice back-to-back before either one's completion continuation runs -- proving the guard is the
     /// synchronous <c>IsBusy</c> check, not a race that happens to resolve in test timing's favor.</summary>

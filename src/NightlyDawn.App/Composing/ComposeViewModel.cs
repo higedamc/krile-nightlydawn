@@ -27,8 +27,11 @@ public enum ComposeMode
 ///
 /// <para><b>No sanitization or truncation here</b> (plan §10.2): the publisher is the one place content is
 /// judged, and a validation failure's <see cref="ArgumentException.Message"/> is surfaced as
-/// <see cref="Status"/> verbatim rather than rewriting what the user typed. On success the box empties; on
-/// any failure it does not, so a rejected post is never lost to a retype.</para>
+/// <see cref="Status"/> verbatim rather than rewriting what the user typed. On success the box empties only
+/// if <see cref="Content"/> still holds exactly what was sent -- the box stays enabled during the round trip
+/// (plan §10.4 non-blocking ③), so text typed while a prior post is in flight must survive it, not be erased
+/// by a success continuation that assumes nothing changed underneath it. On any failure it never empties, so
+/// a rejected post is never lost to a retype either.</para>
 ///
 /// <para><b>Double-submit is stopped structurally</b>, not just by a disabled button binding:
 /// <see cref="PostAsync"/> itself refuses a second call while <see cref="IsBusy"/> is set (plan §10.1-5) --
@@ -146,6 +149,9 @@ public sealed class ComposeViewModel(Func<INotePublisher?> publisher, Func<IPubl
         IsBusy = true;
         var mode = Mode;
         var target = Target;
+        var sentContent = Content; // Captured before the first await (plan §10.4 non-blocking ③): the box
+        // stays enabled during the round trip, so the user can keep typing. Clearing on success must only
+        // erase what was actually sent, not whatever Content happens to hold when the continuation runs.
         Status = mode switch
         {
             ComposeMode.Reply => "Replying…",
@@ -164,7 +170,11 @@ public sealed class ComposeViewModel(Func<INotePublisher?> publisher, Func<IPubl
 
             Post(() =>
             {
-                Content = string.Empty;
+                if (Content == sentContent)
+                {
+                    Content = string.Empty;
+                }
+
                 Mode = ComposeMode.Post;
                 Target = null;
                 var accepted = published.PublishResult.Outcomes.Count(o => o.Accepted);
