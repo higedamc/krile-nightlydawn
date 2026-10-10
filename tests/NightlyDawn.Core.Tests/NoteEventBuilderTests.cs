@@ -28,15 +28,27 @@ public class NoteEventBuilderTests
             FirstSeenOnRelay: firstSeenOnRelay);
 
     [Fact]
-    public void Reply_ToATopLevelNote_CarriesOnlyAReplyTag_NoRootTag()
+    public void Post_ProducesKind1_WithNoTags()
     {
+        var evt = NoteEventBuilder.Post("hello", CreatedAt);
+
+        Assert.Equal((int)NoteKind.Text, evt.Kind);
+        Assert.Equal("hello", evt.Content);
+        Assert.Empty(evt.Tags);
+    }
+
+    [Fact]
+    public void Reply_ToATopLevelNote_CarriesASingleRootMarkedTag_NotReply()
+    {
+        // NIP-10: "For top level replies (those replying directly to the root event), only the 'root'
+        // marker should be used." The parent IS the root here, so there is nothing else to call it.
         var parent = MakeNote("parent1", ParentAuthor);
 
         var evt = NoteEventBuilder.Reply(parent, "hi", Author, CreatedAt);
 
-        Assert.Equal((int)NoteKind.Text, evt.Kind);
-        Assert.Contains(evt.Tags, t => t.SequenceEqual(new[] { "e", "parent1", "", "reply", ParentAuthor }));
-        Assert.DoesNotContain(evt.Tags, t => t.Count > 3 && t[3] == "root");
+        var eTags = evt.Tags.Where(t => t[0] == "e").ToList();
+        Assert.Single(eTags);
+        Assert.Equal(["e", "parent1", "", "root", ParentAuthor], eTags[0]);
     }
 
     [Fact]
@@ -88,7 +100,7 @@ public class NoteEventBuilderTests
     {
         var target = MakeNote("note1", ParentAuthor);
 
-        var evt = NoteEventBuilder.Repost(target, Author, CreatedAt);
+        var evt = NoteEventBuilder.Repost(target, CreatedAt);
 
         Assert.Equal((int)NoteKind.Repost, evt.Kind);
         Assert.Equal(string.Empty, evt.Content);
@@ -103,7 +115,7 @@ public class NoteEventBuilderTests
     {
         var target = MakeNote("repost2", ParentAuthor, kind: kind);
 
-        var ex = Assert.Throws<ArgumentException>(() => NoteEventBuilder.Repost(target, Author, CreatedAt));
+        var ex = Assert.Throws<ArgumentException>(() => NoteEventBuilder.Repost(target, CreatedAt));
         Assert.Contains(kind.ToString(), ex.Message);
     }
 
@@ -112,7 +124,7 @@ public class NoteEventBuilderTests
     {
         var target = MakeNote("note2", ParentAuthor);
 
-        var evt = NoteEventBuilder.Reaction(target, Author, CreatedAt);
+        var evt = NoteEventBuilder.Reaction(target, CreatedAt);
 
         Assert.Equal(7, evt.Kind);
         Assert.Equal("+", evt.Content);
@@ -126,7 +138,7 @@ public class NoteEventBuilderTests
     {
         var target = MakeNote("note2b", ParentAuthor, kind: NoteKind.Repost);
 
-        var evt = NoteEventBuilder.Reaction(target, Author, CreatedAt);
+        var evt = NoteEventBuilder.Reaction(target, CreatedAt);
 
         Assert.Contains(evt.Tags, t => t.SequenceEqual(new[] { "k", "6" }));
     }
@@ -136,21 +148,22 @@ public class NoteEventBuilderTests
     {
         var target = MakeNote("note3", ParentAuthor);
 
-        var evt = NoteEventBuilder.Reaction(target, Author, CreatedAt, content: "\U0001F525");
+        var evt = NoteEventBuilder.Reaction(target, CreatedAt, content: "\U0001F525");
 
         Assert.Equal("\U0001F525", evt.Content);
     }
 
     [Fact]
-    public void Quote_ProducesKind1_WithAQTagAndAPTag()
+    public void Quote_ProducesKind1_WithAFourElementQTagAndAPTag()
     {
         var quoted = MakeNote("note4", ParentAuthor);
 
-        var evt = NoteEventBuilder.Quote(quoted, "check this out", Author, CreatedAt);
+        var evt = NoteEventBuilder.Quote(quoted, "check this out", CreatedAt);
 
         Assert.Equal((int)NoteKind.Text, evt.Kind);
         Assert.Equal("check this out", evt.Content);
-        Assert.Contains(evt.Tags, t => t.SequenceEqual(new[] { "q", "note4", "" }));
+        // NIP-18 q-tag syntax: ["q", "<event-id>", "<relay-url>", "<pubkey-if-a-regular-event>"].
+        Assert.Contains(evt.Tags, t => t.SequenceEqual(new[] { "q", "note4", "", ParentAuthor }));
         Assert.Contains(evt.Tags, t => t.SequenceEqual(new[] { "p", ParentAuthor }));
     }
 }
