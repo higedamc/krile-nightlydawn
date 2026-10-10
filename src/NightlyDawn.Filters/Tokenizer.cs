@@ -130,29 +130,29 @@ internal static class Tokenizer
                     i++;
                     continue;
                 case '"':
-                {
-                    var start = i;
-                    var value = ReadQuotedString(kql, ref i);
-                    tokens.Add(new Token(TokenType.String, value, start));
-                    continue;
-                }
+                    {
+                        var start = i;
+                        var value = ReadQuotedString(kql, ref i);
+                        tokens.Add(new Token(TokenType.String, value, start));
+                        continue;
+                    }
 
                 default:
-                {
-                    var start = i;
-                    while (i < kql.Length && !IsSplitter(kql[i]))
                     {
-                        i++;
-                    }
+                        var start = i;
+                        while (i < kql.Length && !IsSplitter(kql[i]))
+                        {
+                            i++;
+                        }
 
-                    if (i == start)
-                    {
-                        throw new FilterParseException($"Unexpected character '{c}' at position {i} in KQL query.");
-                    }
+                        if (i == start)
+                        {
+                            throw new FilterParseException($"Unexpected character '{c}' at position {i} in KQL query.");
+                        }
 
-                    tokens.Add(new Token(TokenType.Literal, kql[start..i], start));
-                    continue;
-                }
+                        tokens.Add(new Token(TokenType.Literal, kql[start..i], start));
+                        continue;
+                    }
             }
         }
 
