@@ -32,3 +32,62 @@ jobs:
           name: mainwindow-render-frames
           path: tests/NightlyDawn.App.RenderTests/bin/Release/net8.0/RenderFrames/*.png
           if-no-files-found: error
+
+  # Experiment, not a regression gate (plan: PLANS/KRILE_WAYLAND_BACKEND_SMOKE_LEAF.md). Avalonia.Headless
+  # (the render-frames job above) never loads Avalonia.Wayland, so it proves nothing about whether the real
+  # backend can start at all -- this job is the only thing that does. continue-on-error so a red result here
+  # does not block a PR; it still needs to be looked at (artifact + logs), just not automatically.
+  backend-smoke:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Build the host (just the Host project, not the whole solution)
+        run: dotnet build src/NightlyDawn.Host/NightlyDawn.Host.csproj --configuration Release
+
+      - name: Install compositor + capture tooling
+        run: |
+          set -x
+          sudo apt-get update
+          for pkg in cage sway grim xwayland xvfb imagemagick; do
+            if sudo apt-get install -y "$pkg"; then
+              echo "INSTALLED: $pkg"
+            else
+              echo "NOT AVAILABLE: $pkg"
+            fi
+          done
+          echo "--- what's actually on PATH afterwards ---"
+          for bin in cage sway grim Xwayland Xvfb import; do
+            if command -v "$bin" >/dev/null 2>&1; then
+              echo "$bin: $(command -v "$bin")"
+            else
+              echo "$bin: not found"
+            fi
+          done
+
+      # No continue-on-error here (job-level continue-on-error above already keeps a red result from
+      # blocking a PR): a real FAIL must show red on the step, or it is invisible in the checks summary.
+      - name: Wayland backend smoke (NIGHTLYDAWN_BACKEND=wayland)
+        run: bash ci/wayland-backend-smoke.sh
+        env:
+          NIGHTLYDAWN_RELAYS: wss://127.0.0.1:1
+
+      - name: X11 backend smoke (NIGHTLYDAWN_BACKEND=x11, via Xvfb)
+        if: always()
+        run: bash ci/x11-backend-smoke.sh
+        env:
+          NIGHTLYDAWN_RELAYS: wss://127.0.0.1:1
+
+      - name: Upload backend smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-smoke-evidence
+          path: artifacts/backend-smoke/**
+          if-no-files-found: warn
