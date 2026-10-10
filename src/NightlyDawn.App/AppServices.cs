@@ -20,4 +20,7 @@ public static class AppServices
 
     /// <summary>The key store the host constructed (Core's <see cref="IKeyStore"/>; the App never references <c>NightlyDawn.Keys</c>). Null when the host could not create a data directory; only the Keys panel consumes this, never the timeline.</summary>
     public static IKeyStore? KeyStore { get; set; }
+
+    /// <summary>The profile cache the host constructed (Core's <see cref="IProfileStore"/>; the App never references <c>NightlyDawn.Nostr</c> directly for this either). Null for a designer preview or any caller that has not set it; <see cref="TimelineColumnViewModel"/> treats that the same as "nothing resolved yet" and rows fall back to the pubkey-prefix label.</summary>
+    public static IProfileStore? ProfileStore { get; set; }
 }

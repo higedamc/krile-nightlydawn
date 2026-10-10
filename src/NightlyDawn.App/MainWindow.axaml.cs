@@ -41,10 +41,12 @@ public sealed partial class MainWindow : Window
         _clipboardProbe = this.FindControl<TextBox>("ClipboardProbe")!;
         _clipboardStatus = this.FindControl<TextBlock>("ClipboardStatus")!;
 
-        // One read-only column for now (1e). The factory comes from the composition point, never from NightlyDawn.Nostr (B9).
+        // One read-only column for now (1e). The factory and profile store come from the composition point,
+        // never from NightlyDawn.Nostr directly (B9).
         _timeline = new TimelineColumnViewModel(
             AppServices.TimelineSourceFactory,
-            postToUi: action => Dispatcher.UIThread.Post(action));
+            postToUi: action => Dispatcher.UIThread.Post(action),
+            profileStore: AppServices.ProfileStore);
         DataContext = _timeline;
 
         // Keys panel: talks to Core's IKeyStore only (the host constructs the real store). Independent of the timeline.

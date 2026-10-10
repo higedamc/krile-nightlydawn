@@ -33,13 +33,16 @@ public class TimelineColumnViewModelTests
         source.Push(new NoteArrived(TestNotes.Make(1, createdAt: 100)));
         source.Push(new NoteArrived(TestNotes.Make(2, createdAt: 300)));
         source.Push(new NoteArrived(TestNotes.Make(3, createdAt: 200)));
-        await WaitUntil(() => vm.Notes.Count == 3, "three notes shown");
 
+        // Held until InitialLoadComplete, not shown note-by-note (plan §8.1-2: one batched prefetch for the
+        // whole initial load, not one REQ per arriving note).
+        await Task.Delay(50);
+        Assert.Empty(vm.Notes);
         Assert.True(vm.IsLoading); // Notes alone do not end "loading" (B6): the backlog is not known to be complete.
-        Assert.Equal(["note 2", "note 3", "note 1"], vm.Notes.Select(n => n.DisplayContent)); // Newest first.
 
         source.Push(new InitialLoadComplete());
         await WaitUntil(() => !vm.IsLoading, "loading cleared");
+        Assert.Equal(["note 2", "note 3", "note 1"], vm.Notes.Select(n => n.DisplayContent)); // Newest first.
         Assert.Equal("3 notes · live", vm.Status);
 
         source.Complete();
@@ -76,6 +79,8 @@ public class TimelineColumnViewModelTests
 
         vm.Query = "from home";
         vm.Subscribe();
+        first.Push(new InitialLoadComplete()); // Ends loading with an empty backlog; the note below arrives "live".
+        await WaitUntil(() => !vm.IsLoading, "first stream loaded");
         first.Push(new NoteArrived(TestNotes.Make(1, createdAt: 100)));
         await WaitUntil(() => vm.Notes.Count == 1, "first note shown");
         var firstCompletion = vm.StreamCompletion;
@@ -175,6 +180,48 @@ public class TimelineColumnViewModelTests
 
         Assert.Equal(["note 5", "note 4", "note 3"], vm.Notes.Select(n => n.DisplayContent));
         Assert.Equal("3 notes · stream ended.", vm.Status);
+    }
+
+    /// <summary>Integration-level companion to <c>BufferCappedTests</c> below: even when the stream ends
+    /// before <see cref="InitialLoadComplete"/> ever arrives, the column that was buffered mid-load is still
+    /// flushed, sorted, and correctly bounded.</summary>
+    [Fact]
+    public async Task Column_IsBounded_EvenWhenInitialLoadCompleteNeverArrives()
+    {
+        var source = new FakeTimelineSource();
+        using var vm = NewViewModel(new FakeTimelineSourceFactory().Enqueue(source), maxNotes: 3);
+        vm.Query = "from home";
+        vm.Subscribe();
+
+        for (var i = 1; i <= 5; i++)
+        {
+            source.Push(new NoteArrived(TestNotes.Make(i, createdAt: i * 10)));
+        }
+
+        source.Complete(); // No InitialLoadComplete: the stream just ends mid-load.
+        await vm.StreamCompletion.WaitAsync(Timeout);
+
+        Assert.Equal(["note 5", "note 4", "note 3"], vm.Notes.Select(n => n.DisplayContent));
+    }
+
+    /// <summary>The bound itself, not just the column it eventually produces: offering far more than
+    /// <c>maxNotes</c> items must never grow the buffer past that cap at any point, since this buffer holds
+    /// everything a relay sends for as long as it withholds <see cref="InitialLoadComplete"/> -- deliberately
+    /// or otherwise. (A VM-level test using <c>Notes.Count</c> cannot tell this apart from "capped only at
+    /// flush time," because <see cref="AddNote"/> trims the final column regardless; this calls the buffering
+    /// step directly.)</summary>
+    [Fact]
+    public void BufferCapped_NeverExceedsMaxNotes_RegardlessOfHowManyNotesAreOffered()
+    {
+        var buffer = new List<Note>();
+
+        for (var i = 1; i <= 1000; i++)
+        {
+            TimelineColumnViewModel.BufferCapped(buffer, TestNotes.Make(i, createdAt: i), maxNotes: 3);
+            Assert.True(buffer.Count <= 3, $"buffer grew to {buffer.Count} after {i} notes, cap is 3");
+        }
+
+        Assert.Equal([1000, 999, 998], buffer.Select(n => n.CreatedAt));
     }
 
     [Fact]

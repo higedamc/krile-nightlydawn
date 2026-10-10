@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using NightlyDawn.Core;
 
@@ -21,6 +22,7 @@ public sealed class TimelineColumnViewModel : INotifyPropertyChanged, IDisposabl
     private readonly ITimelineSourceFactory _factory;
     private readonly Action<Action> _postToUi;
     private readonly int _maxNotes;
+    private readonly IProfileStore? _profileStore;
     private readonly HashSet<string> _knownIds = new(StringComparer.Ordinal);
 
     private CancellationTokenSource? _streamCts;
@@ -30,7 +32,9 @@ public sealed class TimelineColumnViewModel : INotifyPropertyChanged, IDisposabl
     private bool _isLoading;
     private bool _disposed;
 
-    public TimelineColumnViewModel(ITimelineSourceFactory factory, Action<Action> postToUi, int maxNotes = DefaultMaxNotes)
+    /// <param name="profileStore">Resolves author display names (plan §8). Null skips profile lookups entirely --
+    /// rows show the pubkey-prefix fallback, same as before this leaf.</param>
+    public TimelineColumnViewModel(ITimelineSourceFactory factory, Action<Action> postToUi, int maxNotes = DefaultMaxNotes, IProfileStore? profileStore = null)
     {
         ArgumentNullException.ThrowIfNull(factory);
         ArgumentNullException.ThrowIfNull(postToUi);
@@ -38,6 +42,7 @@ public sealed class TimelineColumnViewModel : INotifyPropertyChanged, IDisposabl
         _factory = factory;
         _postToUi = postToUi;
         _maxNotes = maxNotes;
+        _profileStore = profileStore;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -121,14 +126,60 @@ public sealed class TimelineColumnViewModel : INotifyPropertyChanged, IDisposabl
         CancelCurrentStream();
     }
 
+    /// <summary>Cap on a live (post-initial-load) profile lookup: a silent relay must not stall the note
+    /// stream waiting for a kind:0 that may never arrive.</summary>
+    private static readonly TimeSpan LivePrefetchTimeout = TimeSpan.FromSeconds(3);
+
     private async Task ConsumeAsync(ITimelineSource source, int generation, CancellationToken cancellationToken)
     {
+        // Held until InitialLoadComplete so the whole initial load resolves in one batched PrefetchAsync
+        // instead of one REQ per arriving note (plan §8.1-2: "a 200-author column must not issue 200 of
+        // those"). Live notes after that point still prefetch one at a time -- lower frequency, and the
+        // per-pubkey result is cached already.
+        var initialBuffer = new List<Note>();
+        var initialLoadDone = false;
+
+        // A stream that ends or faults before ever emitting InitialLoadComplete must still show what it had
+        // buffered -- a crash mid-load is not licence to hide notes that already arrived (the pre-batching
+        // behaviour showed them immediately; it must still show them, just not one prefetch REQ apiece).
+        async Task FlushRemainingBufferAsync()
+        {
+            if (initialLoadDone || initialBuffer.Count == 0)
+            {
+                return;
+            }
+
+            initialLoadDone = true;
+            await FlushInitialLoadAsync(initialBuffer, generation, cancellationToken).ConfigureAwait(false);
+        }
+
         try
         {
             await foreach (var update in source.StreamAsync(cancellationToken).ConfigureAwait(false))
             {
+                if (!initialLoadDone && update is NoteArrived buffered)
+                {
+                    BufferCapped(initialBuffer, buffered.Note, _maxNotes);
+                    continue; // inserted once the batched prefetch below has run
+                }
+
+                if (!initialLoadDone && update is InitialLoadComplete)
+                {
+                    initialLoadDone = true;
+                    await FlushInitialLoadAsync(initialBuffer, generation, cancellationToken).ConfigureAwait(false);
+                }
+                else if (initialLoadDone && update is NoteArrived live)
+                {
+                    // Prefetched and awaited here, on the background task, before the row is ever queued for
+                    // insertion -- not after (plan §8.1: NoteRow is immutable, so a row built before its
+                    // author's profile resolves would show the fallback label forever).
+                    await PrefetchAuthorAsync(live.Note.AuthorPubkey, cancellationToken).ConfigureAwait(false);
+                }
+
                 Post(generation, () => Apply(update));
             }
+
+            await FlushRemainingBufferAsync().ConfigureAwait(false);
 
             Post(generation, () =>
             {
@@ -142,12 +193,81 @@ public sealed class TimelineColumnViewModel : INotifyPropertyChanged, IDisposabl
         }
         catch (Exception ex)
         {
+            await FlushRemainingBufferAsync().ConfigureAwait(false);
+
             // Exception type only. Messages can carry relay-supplied text, and the status line is not a log.
             Post(generation, () =>
             {
                 IsLoading = false;
                 Status = $"Timeline stopped: {ex.GetType().Name}.";
             });
+        }
+    }
+
+    /// <summary>Resolves every distinct author in the buffered initial load with one batched
+    /// <see cref="IProfileStore.PrefetchAsync"/> call, then queues each buffered note for insertion --
+    /// in that order, so the rows land on the UI thread before <see cref="InitialLoadComplete"/>'s own
+    /// <c>IsLoading = false</c> does (a render taken between the two would see an empty column).</summary>
+    private async Task FlushInitialLoadAsync(List<Note> buffered, int generation, CancellationToken cancellationToken)
+    {
+        if (buffered.Count == 0)
+        {
+            return;
+        }
+
+        if (_profileStore is not null)
+        {
+            var authors = buffered.Select(n => n.AuthorPubkey).Distinct(StringComparer.Ordinal).ToArray();
+            try
+            {
+                await _profileStore.PrefetchAsync(authors, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception)
+            {
+                // Unresolved: TryGet below returns null either way, same as "no kind:0 exists".
+            }
+        }
+
+        foreach (var note in buffered)
+        {
+            Post(generation, () => AddNote(note));
+        }
+    }
+
+    /// <summary>Resolves (or confirms absent) one author's profile before its row is built. Swallows every
+    /// failure except cancellation: a relay hiccup on the profile lookup must not stop the note stream --
+    /// <see cref="NoteRow.From"/> falls back to the pubkey-prefix label when nothing is cached.</summary>
+    private async Task PrefetchAuthorAsync(string authorPubkey, CancellationToken cancellationToken)
+    {
+        if (_profileStore is null)
+        {
+            return;
+        }
+
+        // Linked, not the bare caller token: a relay that never answers must not stall the live stream, but
+        // an actual cancellation (resubscribe/dispose) must still propagate immediately, not wait out the cap.
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(LivePrefetchTimeout);
+
+        try
+        {
+            await _profileStore.PrefetchAsync([authorPubkey], timeoutCts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw; // the caller's token fired: a real cancellation, propagate it.
+        }
+        catch (OperationCanceledException)
+        {
+            // Only our 3s cap fired: fall through to the hex-prefix label, same as an unresolved profile.
+        }
+        catch (Exception)
+        {
+            // Unresolved: TryGet below returns null either way, same as "no kind:0 exists".
         }
     }
 
@@ -185,7 +305,7 @@ public sealed class TimelineColumnViewModel : INotifyPropertyChanged, IDisposabl
             return; // The same event can arrive from several relays (B7); show it once.
         }
 
-        var row = NoteRow.From(note);
+        var row = NoteRow.From(note, _profileStore?.TryGet(note.AuthorPubkey));
         var index = 0;
         while (index < Notes.Count && Notes[index].CreatedAt >= row.CreatedAt)
         {
@@ -204,6 +324,27 @@ public sealed class TimelineColumnViewModel : INotifyPropertyChanged, IDisposabl
         if (!IsLoading)
         {
             Status = LiveStatus();
+        }
+    }
+
+    /// <summary>Inserts <paramref name="note"/> into <paramref name="buffer"/>, sorted newest-first and capped
+    /// at <paramref name="maxNotes"/> exactly like <see cref="AddNote"/> caps <see cref="Notes"/> -- a relay
+    /// that never emits <see cref="InitialLoadComplete"/> must not grow this buffer without bound (plan
+    /// §8.1-2's cap applies before the flush, not just to the column it produces). A pure, static, parameterized
+    /// function so the bound itself is directly unit-testable, not just observable through the final column.</summary>
+    internal static void BufferCapped(List<Note> buffer, Note note, int maxNotes)
+    {
+        var index = 0;
+        while (index < buffer.Count && buffer[index].CreatedAt >= note.CreatedAt)
+        {
+            index++;
+        }
+
+        buffer.Insert(index, note);
+
+        if (buffer.Count > maxNotes)
+        {
+            buffer.RemoveAt(buffer.Count - 1);
         }
     }
 

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NightlyDawn.Core;
+using NightlyDawn.Nostr.Profiles;
 using NightlyDawn.Nostr.Relay;
 
 namespace NightlyDawn.Nostr.Timelines;
@@ -55,9 +56,14 @@ public sealed class NostrTimelineSourceFactory : ITimelineSourceFactory, IAsyncD
         _initialLoadTimeout = initialLoadTimeout ?? backend.Options.FetchTimeout;
         _ownsBackend = ownsBackend;
         _logger = logger ?? NullLogger.Instance;
+        ProfileStore = new ProfileStore(backend, backend.Mapper);
     }
 
     public NostrBackendDiagnostics Diagnostics => _backend.Diagnostics;
+
+    /// <summary>Shares this factory's backend connection rather than opening a second one (plan §8): the host
+    /// hands this to <c>AppServices.ProfileStore</c> alongside the timeline source factory itself.</summary>
+    public IProfileStore ProfileStore { get; }
 
     /// <summary>Read-only for now: the account is not consulted. See the class summary.</summary>
     public ITimelineSource Create(Timeline timeline, Account account) => CreateAnonymous(timeline);
