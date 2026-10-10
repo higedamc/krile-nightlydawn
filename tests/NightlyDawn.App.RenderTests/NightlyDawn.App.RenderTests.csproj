@@ -2,7 +2,12 @@
 
   <!-- Renders the real MainWindow through Avalonia.Headless + real Skia rasterization (no display server) and
        asserts on the resulting frames. See tests/NightlyDawn.App.Tests for the ViewModel-only tests; this
-       project is the one that actually draws a frame. -->
+       project is the one that actually draws a frame.
+
+       Running this project locally: xunit.v3 launches the test assembly through its own apphost, which resolves the
+       runtime from DOTNET_ROOT rather than from the `dotnet` on PATH. With the SDK installed somewhere other than the
+       default location (for example ~/.dotnet), `dotnet test` reports "Catastrophic failure: Test process terminated
+       unexpectedly" here while every other test project passes. Export DOTNET_ROOT to the SDK directory. -->
   <PropertyGroup>
     <IsPackable>false</IsPackable>
     <Nullable>enable</Nullable>
