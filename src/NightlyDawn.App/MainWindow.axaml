@@ -17,6 +17,8 @@
     <TextBlock DockPanel.Dock="Bottom" Opacity="0.5" FontSize="12" Margin="0,8,0,0"
                Text="Based on Krile StarryEyes by Karno (MIT). New code (C) 2026 Krile NightlyDawn contributors." />
 
+    <views:ComposeBoxView x:Name="ComposeBox" DockPanel.Dock="Top" Margin="0,12,0,0" />
+
     <!-- Keys (goal ②'s UI half). Collapsed: the timeline never needs a key, so this panel is optional for ③. -->
     <Expander x:Name="KeysExpander" DockPanel.Dock="Bottom" Margin="0,12,0,0" IsExpanded="False" Header="Keys">
       <StackPanel Spacing="8" Margin="0,8,0,0">

@@ -1,0 +1,19 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:comp="using:NightlyDawn.App.Composing"
+             x:Class="NightlyDawn.App.Views.ComposeBoxView"
+             x:DataType="comp:ComposeViewModel">
+  <StackPanel Spacing="6">
+    <TextBlock x:Name="TargetBanner" Text="{Binding TargetDescription}" Opacity="0.7" FontSize="12"
+               IsVisible="{Binding HasTarget}" />
+    <StackPanel Orientation="Horizontal" Spacing="8">
+      <TextBox x:Name="ComposeText" Width="520" AcceptsReturn="True" TextWrapping="Wrap" MaxHeight="120"
+               Text="{Binding Content, Mode=TwoWay}" PlaceholderText="What's happening?" />
+      <StackPanel Spacing="4">
+        <Button x:Name="PostButton" Content="Post" IsEnabled="{Binding CanPost}" Click="OnPostClick" />
+        <Button x:Name="CancelTargetButton" Content="Cancel" IsVisible="{Binding HasTarget}" Click="OnCancelTargetClick" />
+      </StackPanel>
+    </StackPanel>
+    <TextBlock x:Name="ComposeStatus" Text="{Binding Status}" Opacity="0.7" FontSize="12" />
+  </StackPanel>
+</UserControl>
