@@ -38,8 +38,8 @@ internal sealed class FakeNotePublisher : INotePublisher
     public Task<PublishedNote> QuoteAsync(Note quoted, string content, CancellationToken cancellationToken = default) =>
         Invoke("Quote", quoted, content);
 
-    public Task<PublishedNote> ReactAsync(Note target, string content = "+", CancellationToken cancellationToken = default) =>
-        Invoke("React", target, content);
+    public async Task<PublishResult> ReactAsync(Note target, string content = "+", CancellationToken cancellationToken = default) =>
+        (await Invoke("React", target, content).ConfigureAwait(false)).PublishResult;
 
     private async Task<PublishedNote> Invoke(string method, Note? target, string content)
     {

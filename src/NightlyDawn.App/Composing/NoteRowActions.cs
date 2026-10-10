@@ -97,14 +97,9 @@ public sealed class NoteRowActions(
         {
             // Fixed "+" only (plan §10.2): v1 opens no arbitrary-string reaction input from this UI, even
             // though INotePublisher.ReactAsync's own validation is a second line of defense either way.
-            //
-            // ReactAsync still returns Task<PublishedNote> on this leaf's base (origin/master, pre-#23): L3a
-            // (unmerged at the time this leaf was written) changes that to Task<PublishResult> directly,
-            // since a reaction has no Note to return (plan §9.1). The only change this call needs once that
-            // lands and this branch rebases is dropping ".PublishResult" below.
             var published = await active.ReactAsync(note, "+", cancellationToken).ConfigureAwait(false);
-            var accepted = published.PublishResult.Outcomes.Count(o => o.Accepted);
-            setStatus($"Reacted · {accepted}/{published.PublishResult.Outcomes.Count} relays accepted.");
+            var accepted = published.Outcomes.Count(o => o.Accepted);
+            setStatus($"Reacted · {accepted}/{published.Outcomes.Count} relays accepted.");
         }
         catch (ArgumentException ex)
         {
