@@ -47,7 +47,7 @@ public sealed class MainWindowRenderTests
         AssertFitsInsideTheWindow(window, "SubscribeButton");
         AssertFitsInsideTheWindow(window, "KeysExpander");
         AssertFitsInsideTheWindow(window, "TimelineList");
-        AssertMinimumSize(window, "TimelineList", minWidth: 600, minHeight: 90);
+        AssertMinimumSize(window, "TimelineList", minWidth: 600, minHeight: 60);
         AssertTextIsNotClipped(window, "Type a query, press Subscribe, and notes stream into the column below.");
     }
 
@@ -200,9 +200,13 @@ public sealed class MainWindowRenderTests
     /// <summary>(b2): a floor under (b)'s zero-size check, specifically for <c>TimelineList</c> -- PR #30's
     /// ubuntu CI run shrank it to 609x19 (still "non-zero", so (b) alone passed) once the tab strip's own
     /// docked row and each column's docked close-button row ate the DockPanel's last fill slot. The floor
-    /// values are DIP, chosen from the 900x600 layout's actual remaining budget (plan §11.6 / PR #30 review);
-    /// this must fail the moment some future row reclaims that budget again, not render a column too short
-    /// to show a note.</summary>
+    /// values are DIP (plan §11.6 / PR #30 review); this must fail the moment some future row reclaims that
+    /// budget again, not render a column too short to show a note.
+    /// <para>60 is deliberately below the *lower* of the two CI platforms' baselines, not at either one:
+    /// the same layout measures 95 DIP tall on macOS and 73 on ubuntu (larger default font metrics), so a
+    /// floor picked from the macOS number fails ubuntu on an unregressed tree -- which is exactly what the
+    /// first attempt at this assertion did. 60 clears ubuntu's 73 with headroom and still catches the 19
+    /// this was written for.</para></summary>
     private static void AssertMinimumSize(MainWindow window, string controlName, double minWidth, double minHeight)
     {
         var control = FindByName<Control>(window, controlName) ?? throw new Xunit.Sdk.XunitException($"{controlName}: not found in the visual tree");
