@@ -47,6 +47,7 @@ public sealed class MainWindowRenderTests
         AssertFitsInsideTheWindow(window, "SubscribeButton");
         AssertFitsInsideTheWindow(window, "KeysExpander");
         AssertFitsInsideTheWindow(window, "TimelineList");
+        AssertMinimumSize(window, "TimelineList", minWidth: 600, minHeight: 90);
         AssertTextIsNotClipped(window, "Type a query, press Subscribe, and notes stream into the column below.");
     }
 
@@ -194,6 +195,21 @@ public sealed class MainWindowRenderTests
             $"{controlName}: starts outside the window at ({topLeft.X:0.#},{topLeft.Y:0.#})");
         Assert.True(topLeft.X + bounds.Width <= window.Bounds.Width + Epsilon && topLeft.Y + bounds.Height <= window.Bounds.Height + Epsilon,
             $"{controlName}: overflows the window — bottom-right ({topLeft.X + bounds.Width:0.#},{topLeft.Y + bounds.Height:0.#}) vs window ({window.Bounds.Width:0.#},{window.Bounds.Height:0.#})");
+    }
+
+    /// <summary>(b2): a floor under (b)'s zero-size check, specifically for <c>TimelineList</c> -- PR #30's
+    /// ubuntu CI run shrank it to 609x19 (still "non-zero", so (b) alone passed) once the tab strip's own
+    /// docked row and each column's docked close-button row ate the DockPanel's last fill slot. The floor
+    /// values are DIP, chosen from the 900x600 layout's actual remaining budget (plan §11.6 / PR #30 review);
+    /// this must fail the moment some future row reclaims that budget again, not render a column too short
+    /// to show a note.</summary>
+    private static void AssertMinimumSize(MainWindow window, string controlName, double minWidth, double minHeight)
+    {
+        var control = FindByName<Control>(window, controlName) ?? throw new Xunit.Sdk.XunitException($"{controlName}: not found in the visual tree");
+        var bounds = control.Bounds;
+
+        Assert.True(bounds.Width >= minWidth && bounds.Height >= minHeight,
+            $"{controlName}: {bounds.Width:0.#}x{bounds.Height:0.#} is below the floor ({minWidth:0.#}x{minHeight:0.#})");
     }
 
     /// <summary>(c): the width the text actually needs must fit in the space available where it sits. A laid-out

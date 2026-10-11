@@ -49,6 +49,7 @@ public sealed class TabViewModel : INotifyPropertyChanged, IDisposable
     public TimelineColumnViewModel AddColumn()
     {
         var column = _columnFactory();
+        column.RequestClose = () => RemoveColumn(column); // closes over this column only, same as CreateColumn's actionsFactory.
         Columns.Add(column);
         SelectedColumn = column;
         return column;

@@ -47,6 +47,23 @@ public class TabViewModelTests
     }
 
     [Fact]
+    public void AddColumn_WiresRequestClose_SoTheColumnCanAskToBeRemoved()
+    {
+        // Required negative control (plan §11.6 / PR #30 review): RequestClose moved the column's own close
+        // button into TimelineColumnView's header row, closing over `column` the same way CreateColumn's
+        // actionsFactory closes over its own column. If AddColumn instead closed over the tab's first column
+        // (the same class of mutation #30's review caught for actionsFactory), the second column's
+        // RequestClose would remove the first one instead -- this asserts it removes itself.
+        var tab = new TabViewModel("Home", NewColumn);
+        var first = tab.AddColumn();
+        var second = tab.AddColumn();
+
+        second.RequestClose!.Invoke();
+
+        Assert.Equal([first], tab.Columns);
+    }
+
+    [Fact]
     public void RemoveColumn_WhenItWasSelected_SelectsTheNextRemainingColumn_OrNullIfNoneAreLeft()
     {
         var tab = new TabViewModel("Home", NewColumn);

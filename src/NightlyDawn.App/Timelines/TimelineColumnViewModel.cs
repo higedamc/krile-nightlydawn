@@ -80,6 +80,13 @@ public sealed class TimelineColumnViewModel : INotifyPropertyChanged, IDisposabl
     /// <summary>The <see cref="Timeline"/> handed to the factory for the current subscription, or null before the first one.</summary>
     public Timeline? ActiveTimeline { get; private set; }
 
+    /// <summary>Set by whoever owns this column (its <see cref="TabViewModel"/>, right after
+    /// <see cref="TabViewModel.AddColumn"/> builds it) so the column's own close button -- now part of
+    /// <see cref="NightlyDawn.App.Views.TimelineColumnView"/>'s header row (plan §11.6 / PR #30 review) --
+    /// can ask to be removed without the column needing a reference back to its tab. Null until the owner
+    /// sets it.</summary>
+    public Action? RequestClose { get; set; }
+
     /// <summary>Completes when the current stream's consumer has exited (tests await this; the UI does not need it).</summary>
     internal Task StreamCompletion { get; private set; } = Task.CompletedTask;
 

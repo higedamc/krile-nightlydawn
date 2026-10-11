@@ -4,56 +4,27 @@
              xmlns:views="using:NightlyDawn.App.Views"
              x:Class="NightlyDawn.App.Views.WorkspaceView"
              x:DataType="tl:WorkspaceViewModel">
-  <!-- Tabs of columns (L4). Default = one tab, one column, so QueryBox/SubscribeButton/TimelineList name
-       resolution stays unique (plan §11.4); everything below only grows past that when a user clicks
-       + Tab / + Column. Process-lifetime only: no layout persistence, no tab rename, no drag reorder (plan §11.5). -->
-  <DockPanel>
-    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,12">
-      <Button x:Name="AddTabButton" DockPanel.Dock="Right" Content="+ Tab" Click="OnAddTabClick" />
+  <!-- Columns of the selected tab (L4). The tab strip itself now lives in MainWindow's header row, beside
+       the title (plan §11.6 / PR #30 review): this control holds only the column row, so it costs no
+       vertical DIP beyond the columns themselves. Default = one tab, one column, so QueryBox/SubscribeButton/
+       TimelineList name resolution stays unique (plan §11.4). Process-lifetime only: no layout persistence,
+       no tab rename, no drag reorder (plan §11.5). -->
+  <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+    <StackPanel Orientation="Horizontal" Spacing="12">
+      <Button x:Name="AddColumnButton" Content="+ Column" VerticalAlignment="Top" Click="OnAddColumnClick" />
 
-      <ItemsControl x:Name="TabStrip" ItemsSource="{Binding Tabs}">
+      <ItemsControl x:Name="ColumnsHost" ItemsSource="{Binding SelectedTab.Columns}">
         <ItemsControl.ItemsPanel>
           <ItemsPanelTemplate>
-            <StackPanel Orientation="Horizontal" Spacing="4" />
+            <StackPanel Orientation="Horizontal" Spacing="12" />
           </ItemsPanelTemplate>
         </ItemsControl.ItemsPanel>
         <ItemsControl.ItemTemplate>
-          <DataTemplate x:DataType="tl:TabViewModel">
-            <Border Padding="8,4" CornerRadius="4" BorderThickness="1"
-                    BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}">
-              <StackPanel Orientation="Horizontal" Spacing="4">
-                <Button x:Name="TabHeaderButton" Content="{Binding Title}" Click="OnSelectTabClick" Tag="{Binding}" />
-                <Button x:Name="CloseTabButton" Content="×" Click="OnCloseTabClick" Tag="{Binding}" />
-              </StackPanel>
-            </Border>
+          <DataTemplate x:DataType="tl:TimelineColumnViewModel">
+            <views:TimelineColumnView MinWidth="420" />
           </DataTemplate>
         </ItemsControl.ItemTemplate>
       </ItemsControl>
-    </DockPanel>
-
-    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-      <StackPanel Orientation="Horizontal" Spacing="12">
-        <Button x:Name="AddColumnButton" Content="+ Column" VerticalAlignment="Top" Click="OnAddColumnClick" />
-
-        <ItemsControl x:Name="ColumnsHost" ItemsSource="{Binding SelectedTab.Columns}">
-          <ItemsControl.ItemsPanel>
-            <ItemsPanelTemplate>
-              <StackPanel Orientation="Horizontal" Spacing="12" />
-            </ItemsPanelTemplate>
-          </ItemsControl.ItemsPanel>
-          <ItemsControl.ItemTemplate>
-            <DataTemplate x:DataType="tl:TimelineColumnViewModel">
-              <Border MinWidth="420">
-                <DockPanel>
-                  <Button x:Name="CloseColumnButton" DockPanel.Dock="Top" HorizontalAlignment="Right"
-                          Content="×" Click="OnCloseColumnClick" Tag="{Binding}" />
-                  <views:TimelineColumnView DockPanel.Dock="Top" />
-                </DockPanel>
-              </Border>
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
-      </StackPanel>
-    </ScrollViewer>
-  </DockPanel>
+    </StackPanel>
+  </ScrollViewer>
 </UserControl>

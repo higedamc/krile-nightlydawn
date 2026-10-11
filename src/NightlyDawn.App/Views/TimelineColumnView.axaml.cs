@@ -14,4 +14,6 @@ public sealed partial class TimelineColumnView : UserControl
     private TimelineColumnViewModel? ViewModel => DataContext as TimelineColumnViewModel;
 
     private void OnSubscribeClick(object? sender, RoutedEventArgs e) => ViewModel?.Subscribe();
+
+    private void OnCloseClick(object? sender, RoutedEventArgs e) => ViewModel?.RequestClose?.Invoke();
 }

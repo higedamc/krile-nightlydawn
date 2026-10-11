@@ -19,8 +19,8 @@ namespace NightlyDawn.App.RenderTests;
 /// only ever exercises the default one-tab/one-column layout). Frame byte/pixel equality against the pre-L4
 /// layout is explicitly not the bar here (plan §11.4: the tab strip is new chrome, so the picture is supposed
 /// to change) -- these tests show instead that (a) whatever this leaf could have broken is structurally
-/// confined to the <c>Workspace</c> element's own box, never leaking into the header/compose/keys/footer chrome
-/// around it, and (b) a multi-tab/multi-column layout renders a non-blank frame.
+/// confined to known boxes, never leaking into the header/compose/keys/footer chrome around it, and (b) a
+/// multi-tab/multi-column layout renders a non-blank frame.
 /// </summary>
 public sealed class WorkspaceRenderTests
 {
@@ -29,17 +29,15 @@ public sealed class WorkspaceRenderTests
     public static readonly string OutputDirectory = Path.Combine(AppContext.BaseDirectory, "RenderFrames");
 
     /// <summary>
-    /// Plan §11.4's required containment check. <c>MainWindow.axaml</c>'s diff for this whole leaf is a single
-    /// element swap at one DockPanel slot -- <c>TimelineColumnView x:Name="Column"</c> became
-    /// <c>WorkspaceView x:Name="Workspace"</c>, same margin, same position among undocked/docked siblings
-    /// (verified by reading the diff, not assumed). Nothing about the header text, <c>ComposeBox</c>,
-    /// <c>KeysExpander</c>, or the footer text's own docking changed, so if their boxes stay disjoint from
-    /// <c>Workspace</c>'s box, nothing this leaf added (the tab strip, the extra columns) could have reached
-    /// them -- the only control actually new to the tree, <c>TabStrip</c>, is asserted to sit inside
-    /// <c>Workspace</c>'s own box, at its top.
+    /// Plan §11.4's containment check, updated for the PR #30 review (§11.6): <c>TabStrip</c> moved out of
+    /// <c>WorkspaceView</c> into <c>MainWindow</c>'s own header row, beside the title, so it no longer costs
+    /// <c>Workspace</c> any vertical DIP. This asserts the opposite of the pre-review version on purpose --
+    /// <c>TabStrip</c> must now be disjoint from <c>Workspace</c>'s box and must sit beside the header title,
+    /// not above the columns. <c>Workspace</c> itself must still stay disjoint from the compose/keys/footer
+    /// chrome around it, same as before.
     /// </summary>
     [AvaloniaFact]
-    public void DefaultLayout_NewChrome_IsContainedInsideTheWorkspaceRegion()
+    public void DefaultLayout_NewChrome_IsContainedInsideTheHeaderRegion()
     {
         using var session = new RenderSession(900, 600, 1.0);
         var window = session.Window;
@@ -50,9 +48,16 @@ public sealed class WorkspaceRenderTests
         var tabStrip = FindByName<Control>(window, "TabStrip")!;
         var tabStripBounds = BoundsInWindow(tabStrip, window);
 
-        AssertContains(workspaceBounds, tabStripBounds, "TabStrip");
-        Assert.True(Math.Abs(tabStripBounds.Y - workspaceBounds.Y) < 1.0,
-            $"TabStrip should sit at the top of Workspace's box; TabStrip.Y={tabStripBounds.Y:0.#}, Workspace.Y={workspaceBounds.Y:0.#}");
+        var header = window.GetVisualDescendants().OfType<TextBlock>()
+            .FirstOrDefault(tb => tb.Text == "Krile NightlyDawn")
+            ?? throw new Xunit.Sdk.XunitException("header title text block not found");
+        var headerBounds = BoundsInWindow(header, window);
+
+        AssertDisjoint(workspaceBounds, tabStripBounds, "TabStrip");
+        Assert.True(Math.Abs(tabStripBounds.Y - headerBounds.Y) < 20.0,
+            $"TabStrip should sit beside the header title, not above the columns; TabStrip.Y={tabStripBounds.Y:0.#}, header.Y={headerBounds.Y:0.#}");
+        Assert.True(tabStripBounds.X >= headerBounds.Right - 0.5,
+            $"TabStrip should sit to the right of the header title; TabStrip.X={tabStripBounds.X:0.#}, header.Right={headerBounds.Right:0.#}");
 
         // "PlatformInfo" is deliberately not in this list: it lives inside the collapsed-by-default "Platform
         // check" Expander, which does not realize its content into the visual tree while collapsed -- neither
@@ -63,10 +68,7 @@ public sealed class WorkspaceRenderTests
             AssertDisjoint(workspaceBounds, BoundsInWindow(sibling, window), name);
         }
 
-        var header = window.GetVisualDescendants().OfType<TextBlock>()
-            .FirstOrDefault(tb => tb.Text == "Krile NightlyDawn")
-            ?? throw new Xunit.Sdk.XunitException("header title text block not found");
-        AssertDisjoint(workspaceBounds, BoundsInWindow(header, window), "header title");
+        AssertDisjoint(workspaceBounds, headerBounds, "header title");
 
         var footer = window.GetVisualDescendants().OfType<TextBlock>()
             .FirstOrDefault(tb => tb.Text?.Contains("Krile NightlyDawn contributors", StringComparison.Ordinal) == true)
@@ -173,12 +175,6 @@ public sealed class WorkspaceRenderTests
             ?? throw new Xunit.Sdk.XunitException($"{control}: not attached to the window's visual tree");
         return new Rect(topLeft, control.Bounds.Size);
     }
-
-    private static void AssertContains(Rect outer, Rect inner, string innerName) =>
-        Assert.True(
-            inner.X >= outer.X - 0.5 && inner.Y >= outer.Y - 0.5 &&
-            inner.Right <= outer.Right + 0.5 && inner.Bottom <= outer.Bottom + 0.5,
-            $"{innerName} {inner} is not contained inside Workspace {outer}");
 
     private static void AssertDisjoint(Rect a, Rect b, string bName) =>
         Assert.True(!a.Intersects(b), $"Workspace {a} overlaps {bName} {b}, expected disjoint boxes");
