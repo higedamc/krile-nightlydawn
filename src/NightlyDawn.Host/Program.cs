@@ -61,8 +61,9 @@ internal static class Program
         else
         {
             // Unrecognised value: say so and follow the OS. Silently treating a typo as "system" would look
-            // exactly like a working setting.
-            Console.Error.WriteLine($"[NightlyDawn] {ThemeEnvVar}=\"{themeSetting}\" is not one of light|dark|system; following the OS theme.");
+            // exactly like a working setting. The value is echoed through Printable so a value carrying newlines
+            // or terminal escapes cannot forge a log line or rewrite the operator's terminal (CWE-117).
+            Console.Error.WriteLine($"[NightlyDawn] {ThemeEnvVar}=\"{Printable(themeSetting)}\" is not one of light|dark|system; following the OS theme.");
         }
 
         Console.Error.WriteLine($"[NightlyDawn] theme: {AppServices.Theme.ToString().ToLowerInvariant()}");
@@ -97,6 +98,22 @@ internal static class Program
         {
             timelineSourceFactory.DisposeAsync().AsTask().GetAwaiter().GetResult();
         }
+    }
+
+    /// <summary>
+    /// Renders an environment-supplied value safe to write to stderr: every control character (newlines, the ESC
+    /// that starts a terminal escape sequence, NUL) becomes a visible <c>?</c>. Diagnostics quote values the
+    /// operator set, and an operator reading them in a terminal should not be able to have their terminal driven
+    /// or a log line forged by what was in the variable (CWE-117).
+    /// </summary>
+    private static string Printable(string? value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return string.Empty;
+        }
+
+        return string.Concat(value.Select(c => char.IsControl(c) ? '?' : c));
     }
 
     // Also used by the Avalonia designer / previewer.
