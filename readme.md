@@ -44,7 +44,12 @@ Requires the .NET 8 SDK (see `global.json`).
 dotnet run --project src/NightlyDawn.Host
 ```
 
-The window shows one timeline column. Type a query, press Subscribe (or Enter),
+The window opens with one tab holding one timeline column. `+ Tab` adds a tab,
+`+ Column` adds a column to the active tab, and a column's `×` closes it and stops
+its subscription. **Neither tabs nor columns are persisted yet** (`IAppStateStore`
+is not wired to the shell), so every launch starts from one tab and one column.
+
+Each column holds its own query. Type one, press Subscribe (or Enter),
 and public notes from the configured relays stream in; the loading bar clears
 once every connected relay has delivered its stored events.
 
@@ -87,7 +92,23 @@ optional and independent of the timeline:
   the stored key from this device and asks you to press it twice — export first
   if you want to keep it.
 
-Nothing signs or publishes yet; the key is for identity set-up ahead of posting.
+Posting needs an unlocked key. With one, the compose box above the columns has
+**Post**, and each note row carries **Reply**, **Quote**, **Repost** and a heart
+(kind:7 reaction, content `+`). Without a key store the host prints
+`publishing: unavailable (no key store)` at startup and the App reports publishing as
+unavailable up front rather than failing after you have typed, so
+`[NightlyDawn] publishing: ready` on stderr is the line to check before trying to post.
+
+Two things worth knowing before the first post:
+
+- **Publishing goes to every connected relay in the pool, not to a NIP-65 write list.**
+  The default pool is `wss://relay.damus.io` and `wss://nos.lol`; set
+  `NIGHTLYDAWN_RELAYS` to publish somewhere else.
+- **Reply and Repost only target kind:1 notes**: on a repost row both buttons are
+  disabled (`CanReplyOrRepost`), and the Core builder rejects the call outright
+  (`ArgumentException`) so the rule does not depend on the UI remembering it. Quote
+  and the heart work on any kind. Generic reposts (kind:16) and deletions (kind:5)
+  are deliberately not in v1.
 
 ### macOS
 
