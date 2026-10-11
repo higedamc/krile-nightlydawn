@@ -132,6 +132,34 @@ public sealed class ThemeRenderTests
         }
     }
 
+    /// <summary>The production wiring: the running app has to read <see cref="AppServices.Theme"/> at startup. Every
+    /// other test here applies the variant itself, so deleting the call in <c>App.Initialize</c> would leave them all
+    /// green while <c>NIGHTLYDAWN_THEME</c> silently stopped working (measured: that mutation passes 17/17 without
+    /// this test). A second <see cref="App"/> instance is initialised for this, separate from the one hosting the
+    /// window.</summary>
+    [AvaloniaFact]
+    public void InitializeAppliesTheConfiguredTheme()
+    {
+        var previous = AppServices.Theme;
+
+        try
+        {
+            AppServices.Theme = AppTheme.Dark;
+            var app = new App();
+            app.Initialize();
+            Assert.Equal(ThemeVariant.Dark, app.RequestedThemeVariant);
+
+            AppServices.Theme = AppTheme.Light;
+            var light = new App();
+            light.Initialize();
+            Assert.Equal(ThemeVariant.Light, light.RequestedThemeVariant);
+        }
+        finally
+        {
+            AppServices.Theme = previous;
+        }
+    }
+
     /// <summary>The accent has to be on the screen, not just in a dictionary. The primary action (Subscribe, keyed
     /// off <c>IsDefault</c>) is sampled a few pixels inside its own bounds, away from the glyphs, so a theme that
     /// resolves the right colour but never paints a control still fails.</summary>
