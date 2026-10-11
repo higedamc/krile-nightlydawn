@@ -1,0 +1,34 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!--
+    The few places Krile paints over Fluent's defaults. Included after FluentTheme in App.axaml, so these win.
+
+    Why a style and not an override of whatever key Fluent's Window template reads: that key was measured to be
+    neither of the obvious candidates (overriding ApplicationPageBackgroundThemeBrush left the window flat black
+    in dark and flat white in light), and an internal key name is not a contract Avalonia keeps across versions.
+    Setting the property we actually mean keeps the palette working when the theme's internals move.
+  -->
+  <Style Selector="Window">
+    <Setter Property="Background" Value="{DynamicResource KrileWindowBackgroundBrush}" />
+  </Style>
+
+  <!-- The timeline reads as a panel sitting on the window rather than a hole in it. Selector-based so the palette
+       reaches the column without this leaf editing a single view: the shell is being rewritten in parallel (L4),
+       and a colour change has no business touching those files. -->
+  <Style Selector="ListBox">
+    <Setter Property="Background" Value="{DynamicResource KrilePanelBackgroundBrush}" />
+  </Style>
+
+  <!-- Selection is the one place the accent has to be unmistakable; Fluent's default selection is a grey wash. -->
+  <Style Selector="ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource KrileSelectionBrush}" />
+  </Style>
+
+  <!-- The primary action of each panel (Subscribe, Post) carries the accent. Keyed off IsDefault rather than a
+       class so no view has to be edited to opt in, and so a new panel's primary button inherits it for free. -->
+  <Style Selector="Button[IsDefault=True]">
+    <Setter Property="Background" Value="{DynamicResource KrileAccentBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource KrileAccentBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource KrileOnAccentBrush}" />
+  </Style>
+</Styles>

@@ -175,6 +175,33 @@ command above. Avalonia uses its native macOS backend; nothing else is needed.
    NIGHTLYDAWN_SCREENSHOT=/tmp/nightlydawn-x11.png     NIGHTLYDAWN_BACKEND=x11     dotnet run --project src/NightlyDawn.Host
    ```
 
+## Theme
+
+The palette is Krile's own: a dark-leaning purple, with a light variant of the
+same hue. The host follows the OS by default and can be pinned:
+
+```
+NIGHTLYDAWN_THEME=dark   dotnet run --project src/NightlyDawn.Host
+NIGHTLYDAWN_THEME=light  dotnet run --project src/NightlyDawn.Host
+NIGHTLYDAWN_THEME=system dotnet run --project src/NightlyDawn.Host   # the default: follow the OS
+```
+
+The app prints `theme: system|light|dark` at startup, and says so loudly if the
+variable holds something it does not recognise (it then follows the OS, rather
+than silently pretending the setting worked).
+
+**There is no in-app toggle yet, and nothing is persisted**: the variant lives
+for the run. A toggle belongs to the window shell, which is being rewritten for
+tabs and columns, and persistence belongs with the rest of the app state
+(`IAppStateStore`); both are separate pieces of work on purpose.
+
+The colours live in `src/NightlyDawn.App/Themes/` and no view opts into them:
+`KrileTheme.axaml` holds the palette per variant (including the Fluent keys the
+stock controls already read), and `KrileStyles.axaml` paints the few surfaces
+that need to be Krile's rather than Fluent's. `NightlyDawn.App.RenderTests`
+renders the real window in both variants and asserts on the pixels, so CI's
+artifact carries a light and a dark screenshot of every pull request.
+
 ## License
 
 Krile StarryEyes is licensed under the MIT/X11 License — see `LICENSE.TXT`.

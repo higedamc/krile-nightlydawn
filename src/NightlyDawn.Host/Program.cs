@@ -25,6 +25,14 @@ internal static class Program
     /// </summary>
     private const string ScreenshotEnvVar = "NIGHTLYDAWN_SCREENSHOT";
 
+    /// <summary>
+    /// Theme override (L1): <c>NIGHTLYDAWN_THEME=dark</c> or <c>light</c> pins a variant, <c>system</c> (or unset)
+    /// follows the OS. Parsing and the Core-to-Avalonia mapping live in the App layer's
+    /// <see cref="NightlyDawn.App.Theming.ThemeController"/>, so the host, the render harness and a future in-app
+    /// toggle all switch the theme through one code path.
+    /// </summary>
+    private static readonly string ThemeEnvVar = NightlyDawn.App.Theming.ThemeController.EnvironmentVariable;
+
     [STAThread]
     private static int Main(string[] args)
     {
@@ -44,6 +52,21 @@ internal static class Program
         AppServices.TimelineSourceFactory = timelineSourceFactory;
         AppServices.ProfileStore = timelineSourceFactory.ProfileStore; // Shares the same backend/relay pool (plan §8).
         AppServices.ScreenshotPath = Environment.GetEnvironmentVariable(ScreenshotEnvVar);
+
+        var themeSetting = Environment.GetEnvironmentVariable(ThemeEnvVar);
+        if (NightlyDawn.App.Theming.ThemeController.TryParse(themeSetting, out var theme))
+        {
+            AppServices.Theme = theme;
+        }
+        else
+        {
+            // Unrecognised value: say so and follow the OS. Silently treating a typo as "system" would look
+            // exactly like a working setting. The value is echoed through Printable so a value carrying newlines
+            // or terminal escapes cannot forge a log line or rewrite the operator's terminal (CWE-117).
+            Console.Error.WriteLine($"[NightlyDawn] {ThemeEnvVar}=\"{Printable(themeSetting)}\" is not one of light|dark|system; following the OS theme.");
+        }
+
+        Console.Error.WriteLine($"[NightlyDawn] theme: {AppServices.Theme.ToString().ToLowerInvariant()}");
         Console.Error.WriteLine($"[NightlyDawn] relays: {string.Join(", ", relays.Select(r => r.Value))}");
 
         // Local NIP-49 key store (leaf 1b), wired here so the App only ever sees Core's IKeyStore. The timeline
@@ -75,6 +98,22 @@ internal static class Program
         {
             timelineSourceFactory.DisposeAsync().AsTask().GetAwaiter().GetResult();
         }
+    }
+
+    /// <summary>
+    /// Renders an environment-supplied value safe to write to stderr: every control character (newlines, the ESC
+    /// that starts a terminal escape sequence, NUL) becomes a visible <c>?</c>. Diagnostics quote values the
+    /// operator set, and an operator reading them in a terminal should not be able to have their terminal driven
+    /// or a log line forged by what was in the variable (CWE-117).
+    /// </summary>
+    private static string Printable(string? value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return string.Empty;
+        }
+
+        return string.Concat(value.Select(c => char.IsControl(c) ? '?' : c));
     }
 
     // Also used by the Avalonia designer / previewer.

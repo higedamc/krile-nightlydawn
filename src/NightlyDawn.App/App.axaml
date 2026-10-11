@@ -2,7 +2,17 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="NightlyDawn.App.App"
              RequestedThemeVariant="Default">
+  <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <!-- Krile's palette (L1). Application.Resources is consulted before the theme's own resources, so these
+             override the Fluent keys the controls already bind to without touching a single view. -->
+        <ResourceInclude Source="avares://NightlyDawn.App/Themes/KrileTheme.axaml" />
+      </ResourceDictionary.MergedDictionaries>
+    </ResourceDictionary>
+  </Application.Resources>
   <Application.Styles>
     <FluentTheme />
+    <StyleInclude Source="avares://NightlyDawn.App/Themes/KrileStyles.axaml" />
   </Application.Styles>
 </Application>

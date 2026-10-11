@@ -26,4 +26,9 @@ public static class AppServices
 
     /// <summary>The publisher the host constructed (Core's <see cref="INotePublisher"/>; same null-tolerant pattern as <see cref="ProfileStore"/>). Null until a host wires a real implementation -- today that means <c>NightlyDawn.Nostr.Publishing.NotePublisher</c> (L3a), which this leaf does not depend on: both <see cref="App.Composing.ComposeViewModel"/> and <see cref="App.Composing.NoteRowActions"/> read this through a <c>Func&lt;INotePublisher?&gt;</c> so a host wiring it up later needs no new App-layer code.</summary>
     public static INotePublisher? NotePublisher { get; set; }
+
+    /// <summary>The theme variant the host chose, read once by <see cref="App.Initialize"/> (L1). Defaults to
+    /// <see cref="AppTheme.System"/> = follow the OS, which is also what a designer preview and any host that does
+    /// not set it get. The host reads <c>NIGHTLYDAWN_THEME</c>; see <see cref="Theming.ThemeController"/>.</summary>
+    public static AppTheme Theme { get; set; } = AppTheme.System;
 }
