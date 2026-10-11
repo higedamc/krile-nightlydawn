@@ -1,0 +1,30 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:tl="using:NightlyDawn.App.Timelines"
+             xmlns:views="using:NightlyDawn.App.Views"
+             x:Class="NightlyDawn.App.Views.WorkspaceView"
+             x:DataType="tl:WorkspaceViewModel">
+  <!-- Columns of the selected tab (L4). The tab strip itself now lives in MainWindow's header row, beside
+       the title (plan §11.6 / PR #30 review): this control holds only the column row, so it costs no
+       vertical DIP beyond the columns themselves. Default = one tab, one column, so QueryBox/SubscribeButton/
+       TimelineList name resolution stays unique (plan §11.4). Process-lifetime only: no layout persistence,
+       no tab rename, no drag reorder (plan §11.5). -->
+  <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+    <StackPanel Orientation="Horizontal" Spacing="12">
+      <Button x:Name="AddColumnButton" Content="+ Column" VerticalAlignment="Top" Click="OnAddColumnClick" />
+
+      <ItemsControl x:Name="ColumnsHost" ItemsSource="{Binding SelectedTab.Columns}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <StackPanel Orientation="Horizontal" Spacing="12" />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="tl:TimelineColumnViewModel">
+            <views:TimelineColumnView MinWidth="420" />
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

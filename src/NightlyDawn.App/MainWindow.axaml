@@ -3,16 +3,22 @@
         xmlns:tl="using:NightlyDawn.App.Timelines"
         xmlns:views="using:NightlyDawn.App.Views"
         x:Class="NightlyDawn.App.MainWindow"
-        x:DataType="tl:TimelineColumnViewModel"
+        x:DataType="tl:WorkspaceViewModel"
         Title="Krile NightlyDawn"
         Width="960" Height="640"
         MinWidth="480" MinHeight="320">
   <DockPanel Margin="16">
-    <StackPanel DockPanel.Dock="Top" Spacing="4">
-      <TextBlock Text="Krile NightlyDawn" FontSize="28" FontWeight="SemiBold" />
-      <TextBlock Text="Type a query, press Subscribe, and notes stream into the column below."
-                 Opacity="0.7" />
-    </StackPanel>
+    <!-- TabStripView sits to the right of the title, in the same header row (plan §11.6 / PR #30 review):
+         a horizontal sibling of the title stack costs 0 extra vertical DIP, unlike its old home inside
+         WorkspaceView. -->
+    <DockPanel DockPanel.Dock="Top">
+      <views:TabStripView DockPanel.Dock="Right" VerticalAlignment="Center" />
+      <StackPanel Spacing="4">
+        <TextBlock Text="Krile NightlyDawn" FontSize="28" FontWeight="SemiBold" />
+        <TextBlock Text="Type a query, press Subscribe, and notes stream into the column below."
+                   Opacity="0.7" />
+      </StackPanel>
+    </DockPanel>
 
     <TextBlock DockPanel.Dock="Bottom" Opacity="0.5" FontSize="12" Margin="0,8,0,0"
                Text="Based on Krile StarryEyes by Karno (MIT). New code (C) 2026 Krile NightlyDawn contributors." />
@@ -35,6 +41,6 @@
       </StackPanel>
     </Expander>
 
-    <views:TimelineColumnView x:Name="Column" Margin="0,16,0,0" />
+    <views:WorkspaceView x:Name="Workspace" Margin="0,16,0,0" />
   </DockPanel>
 </Window>

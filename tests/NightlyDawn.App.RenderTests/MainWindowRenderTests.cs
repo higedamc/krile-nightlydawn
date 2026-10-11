@@ -47,6 +47,7 @@ public sealed class MainWindowRenderTests
         AssertFitsInsideTheWindow(window, "SubscribeButton");
         AssertFitsInsideTheWindow(window, "KeysExpander");
         AssertFitsInsideTheWindow(window, "TimelineList");
+        AssertMinimumSize(window, "TimelineList", minWidth: 600, minHeight: 60);
         AssertTextIsNotClipped(window, "Type a query, press Subscribe, and notes stream into the column below.");
     }
 
@@ -93,7 +94,9 @@ public sealed class MainWindowRenderTests
             Pump(() => FindByName<Control>(Window, "GenerateBox")?.IsVisible == true,
                 "the Keys panel never reached the NoKey/Generate state");
 
-            var timeline = (TimelineColumnViewModel)Window.DataContext!;
+            // Workspace starts with one tab and one column (plan §11.4); that default column is the one
+            // this test's query goes to, same as the single TimelineColumnViewModel before L4.
+            var timeline = ((WorkspaceViewModel)Window.DataContext!).Tabs[0].Columns[0];
             timeline.Query = "from home";
             timeline.Subscribe();
             Pump(() => !timeline.IsLoading, "the timeline stream never finished");
@@ -192,6 +195,25 @@ public sealed class MainWindowRenderTests
             $"{controlName}: starts outside the window at ({topLeft.X:0.#},{topLeft.Y:0.#})");
         Assert.True(topLeft.X + bounds.Width <= window.Bounds.Width + Epsilon && topLeft.Y + bounds.Height <= window.Bounds.Height + Epsilon,
             $"{controlName}: overflows the window — bottom-right ({topLeft.X + bounds.Width:0.#},{topLeft.Y + bounds.Height:0.#}) vs window ({window.Bounds.Width:0.#},{window.Bounds.Height:0.#})");
+    }
+
+    /// <summary>(b2): a floor under (b)'s zero-size check, specifically for <c>TimelineList</c> -- PR #30's
+    /// ubuntu CI run shrank it to 609x19 (still "non-zero", so (b) alone passed) once the tab strip's own
+    /// docked row and each column's docked close-button row ate the DockPanel's last fill slot. The floor
+    /// values are DIP (plan §11.6 / PR #30 review); this must fail the moment some future row reclaims that
+    /// budget again, not render a column too short to show a note.
+    /// <para>60 is deliberately below the *lower* of the two CI platforms' baselines, not at either one:
+    /// the same layout measures 95 DIP tall on macOS and 73 on ubuntu (larger default font metrics), so a
+    /// floor picked from the macOS number fails ubuntu on an unregressed tree -- which is exactly what the
+    /// first attempt at this assertion did. 60 clears ubuntu's 73 with headroom and still catches the 19
+    /// this was written for.</para></summary>
+    private static void AssertMinimumSize(MainWindow window, string controlName, double minWidth, double minHeight)
+    {
+        var control = FindByName<Control>(window, controlName) ?? throw new Xunit.Sdk.XunitException($"{controlName}: not found in the visual tree");
+        var bounds = control.Bounds;
+
+        Assert.True(bounds.Width >= minWidth && bounds.Height >= minHeight,
+            $"{controlName}: {bounds.Width:0.#}x{bounds.Height:0.#} is below the floor ({minWidth:0.#}x{minHeight:0.#})");
     }
 
     /// <summary>(c): the width the text actually needs must fit in the space available where it sits. A laid-out

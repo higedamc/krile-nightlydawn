@@ -1,0 +1,30 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:tl="using:NightlyDawn.App.Timelines"
+             x:Class="NightlyDawn.App.Views.TabStripView"
+             x:DataType="tl:WorkspaceViewModel">
+  <!-- Lives in MainWindow's header row, beside the title (plan §11.6 / PR #30 review): a horizontal sibling
+       costs 0 vertical DIP, unlike the row this used to occupy inside WorkspaceView. -->
+  <DockPanel>
+    <Button x:Name="AddTabButton" DockPanel.Dock="Right" Content="+ Tab" Click="OnAddTabClick" />
+
+    <ItemsControl x:Name="TabStrip" ItemsSource="{Binding Tabs}">
+      <ItemsControl.ItemsPanel>
+        <ItemsPanelTemplate>
+          <StackPanel Orientation="Horizontal" Spacing="4" />
+        </ItemsPanelTemplate>
+      </ItemsControl.ItemsPanel>
+      <ItemsControl.ItemTemplate>
+        <DataTemplate x:DataType="tl:TabViewModel">
+          <Border Padding="8,4" CornerRadius="4" BorderThickness="1"
+                  BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <Button x:Name="TabHeaderButton" Content="{Binding Title}" Click="OnSelectTabClick" Tag="{Binding}" />
+              <Button x:Name="CloseTabButton" Content="×" Click="OnCloseTabClick" Tag="{Binding}" />
+            </StackPanel>
+          </Border>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+  </DockPanel>
+</UserControl>

@@ -14,6 +14,9 @@
                  Text="{Binding Query, Mode=TwoWay}"
                  PlaceholderText="from home   |   from user(npub1...)   |   from search(&quot;nostr&quot;)" />
         <Button x:Name="SubscribeButton" Content="Subscribe" IsDefault="True" Click="OnSubscribeClick" />
+        <!-- Shares this row with QueryBox/SubscribeButton instead of its own docked row (plan §11.6 / PR #30
+             review: a separate row cost 27 DIP the 900x600 layout did not have to spend). -->
+        <Button x:Name="CloseColumnButton" Content="×" Click="OnCloseClick" />
       </StackPanel>
 
       <ProgressBar DockPanel.Dock="Top" Margin="0,8,0,0" IsIndeterminate="True"
