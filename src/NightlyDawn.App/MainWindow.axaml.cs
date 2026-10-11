@@ -20,7 +20,7 @@ public sealed partial class MainWindow : Window
     private readonly TextBox _clipboardProbe;
     private readonly TextBlock _clipboardStatus;
     private readonly ComposeViewModel _compose;
-    private readonly TimelineColumnViewModel _timeline;
+    private readonly WorkspaceViewModel _workspace;
     private readonly KeyPanelViewModel _keys;
 
     public MainWindow()
@@ -30,35 +30,49 @@ public sealed partial class MainWindow : Window
         _clipboardProbe = this.FindControl<TextBox>("ClipboardProbe")!;
         _clipboardStatus = this.FindControl<TextBlock>("ClipboardStatus")!;
 
-        // Compose box: built before the timeline column below, since each row's NoteRowActions (plan
-        // §10.1-2) needs a compose view model to hand Reply/Quote targets to. Reaches _timeline back through
-        // a Func (sink) rather than a direct reference -- the column does not exist yet at this point.
+        // Compose box: built before the workspace below, since each column's actionsFactory (plan §10.1-2)
+        // needs a compose view model to hand Reply/Quote targets to. Reaches _workspace back through a Func
+        // (sink) rather than a direct reference -- the workspace does not exist yet at this point.
         _compose = new ComposeViewModel(
             publisher: () => AppServices.NotePublisher,
-            sink: () => _timeline,
+            sink: () => _workspace!.ActiveSink,
             postToUi: action => Dispatcher.UIThread.Post(action));
         this.FindControl<ComposeBoxView>("ComposeBox")!.DataContext = _compose;
 
-        // One read-only column for now (1e). The factory and profile store come from the composition point,
-        // never from NightlyDawn.Nostr directly (B9). actionsFactory builds each row's publish handle at
-        // construction time (plan §10.1-2), closing over _compose/_timeline/AppServices.NotePublisher so a
-        // host wiring a real publisher later needs no change here.
-        _timeline = new TimelineColumnViewModel(
-            AppServices.TimelineSourceFactory,
-            postToUi: action => Dispatcher.UIThread.Post(action),
-            profileStore: AppServices.ProfileStore,
-            // _timeline is read here only through this closure, invoked lazily (plan §10.1-2's row-build time,
-            // well after this constructor returns) -- the nullable analyzer cannot see that, since it only
-            // tracks flow up to this statement, not when the delegate actually runs.
-            actionsFactory: note => new NoteRowActions(note, () => AppServices.NotePublisher, _compose, _timeline!, _timeline!.ReportStatus));
-        DataContext = _timeline;
+        // The workspace starts with one tab and one column (plan §11.4); every further tab/column the user
+        // opens is built through CreateColumn below, the single place a column is ever constructed (plan
+        // §11.1).
+        _workspace = new WorkspaceViewModel(CreateColumn);
+        DataContext = _workspace; // WorkspaceView inherits this, same as TimelineColumnView did before 0e-b/L4.
 
-        // Keys panel: talks to Core's IKeyStore only (the host constructs the real store). Independent of the timeline.
+        // Keys panel: talks to Core's IKeyStore only (the host constructs the real store). Independent of the workspace.
         _keys = new KeyPanelViewModel(AppServices.KeyStore, postToUi: action => Dispatcher.UIThread.Post(action));
         this.FindControl<KeysPanelView>("KeysPanel")!.Attach(_keys);
 
         Opened += OnOpened;
-        Closed += (_, _) => _timeline.Dispose();
+        Closed += (_, _) => _workspace.Dispose();
+    }
+
+    /// <summary>
+    /// The one place a <see cref="TimelineColumnViewModel"/> is built (plan §11.1): the factory and profile
+    /// store come from the composition point, never from <c>NightlyDawn.Nostr</c> directly (B9).
+    /// <paramref name="column"/>'s <c>actionsFactory</c> closes over the column this call itself produces, not
+    /// a field shared across columns -- the required test for this leaf is that column B's row actions report
+    /// only to column B, and a factory that closed over one shared field (like the pre-L4 single-column
+    /// closure did) would make every column's rows report to whichever column that field pointed at last.
+    /// </summary>
+    private TimelineColumnViewModel CreateColumn()
+    {
+        TimelineColumnViewModel? column = null;
+        // column is read here only through this closure, invoked lazily (plan §10.1-2's row-build time, well
+        // after this method returns) -- the nullable analyzer cannot see that, since it only tracks flow up
+        // to this statement, not when the delegate actually runs.
+        column = new TimelineColumnViewModel(
+            AppServices.TimelineSourceFactory,
+            postToUi: action => Dispatcher.UIThread.Post(action),
+            profileStore: AppServices.ProfileStore,
+            actionsFactory: note => new NoteRowActions(note, () => AppServices.NotePublisher, _compose, column!, column!.ReportStatus));
+        return column;
     }
 
     private void OnOpened(object? sender, EventArgs e)

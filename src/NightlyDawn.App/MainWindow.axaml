@@ -3,7 +3,7 @@
         xmlns:tl="using:NightlyDawn.App.Timelines"
         xmlns:views="using:NightlyDawn.App.Views"
         x:Class="NightlyDawn.App.MainWindow"
-        x:DataType="tl:TimelineColumnViewModel"
+        x:DataType="tl:WorkspaceViewModel"
         Title="Krile NightlyDawn"
         Width="960" Height="640"
         MinWidth="480" MinHeight="320">
@@ -35,6 +35,6 @@
       </StackPanel>
     </Expander>
 
-    <views:TimelineColumnView x:Name="Column" Margin="0,16,0,0" />
+    <views:WorkspaceView x:Name="Workspace" Margin="0,16,0,0" />
   </DockPanel>
 </Window>
