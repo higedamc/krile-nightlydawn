@@ -15,6 +15,10 @@
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.1.3" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.3" />
+    <!-- SkiaSharp is already in the graph through Avalonia.Skia (Host, RenderTests); the explicit reference is for
+         SKCodec, which reads an image header's dimensions without allocating pixels (AvatarImageCache, plan §27).
+         Same version as Avalonia 12.1.3's own dependency, so nothing new is pulled in. -->
+    <PackageReference Include="SkiaSharp" Version="3.119.4" />
     <!-- Platform backends (Desktop, Wayland) and the Inter font live in NightlyDawn.Host, where AppBuilder is configured. -->
   </ItemGroup>
 
@@ -38,6 +42,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="NightlyDawn.App.Tests" />
+    <InternalsVisibleTo Include="NightlyDawn.App.RenderTests" />
   </ItemGroup>
 
 </Project>

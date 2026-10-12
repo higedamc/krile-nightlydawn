@@ -10,10 +10,7 @@
     command buttons hidden until the pointer is over the row (`CommandButtonRootPanel` there, :pointerover
     here — WPF storyboards have no Avalonia equivalent worth importing for a show/hide).
 
-    Two deliberate differences from that file, both because the piece they need has not landed yet:
-      - the avatar gutter is empty. The image loader is PR #34 and the wiring that fills this slot is L6b;
-        reserving the width here (rather than with the image) keeps the next leaf from moving every row.
-        Nothing is drawn in the meantime: a placeholder box would claim "loading" for a request never made.
+    One deliberate difference from that file, because the piece it needs has not landed yet:
       - selection does not reveal the commands, only hover. The fork keys off IsSelected as well, which lives
         on the ListBoxItem *above* this control — a UserControl's styles cannot select its own ancestor, and
         the view that owns the list is being rewritten in parallel (L4b, plan §21.2).
@@ -51,14 +48,21 @@
   </UserControl.Styles>
 
   <!-- Background="Transparent" on the row root, not on the pieces inside it: without it the empty parts of
-       the row (the avatar gutter until L6b fills it, the space past a short line of text) are not hit-tested,
+       the row (the avatar gutter while it has no image, the space past a short line of text) are not hit-tested,
        the pointer falls through to the ListBoxItem above, and :pointerover never fires there. The commands
        would then appear only while the pointer is literally over a glyph. The gutter-hover assertion in
        NoteRowShapeRenderTests is what holds this line in place. -->
   <Grid ColumnDefinitions="Auto,*" Margin="0,2" Background="Transparent">
-    <!-- Width and height match the fork's DecodePixelWidth="48" status avatar (Timeline.xaml:413). -->
+    <!-- Width and height match the fork's DecodePixelWidth="48" status avatar (Timeline.xaml:413). The size is
+         fixed on the Border, not derived from the image: a row's height must be the same with an avatar, with
+         none, and with one that failed to decode, or the column reflows as images arrive (L6b). The Image's
+         Source is set from code-behind (NoteRowView.axaml.cs), not bound, because the bitmap arrives from a
+         background fetch that has to be cancelled when the row is recycled; nothing is drawn until it does;
+         a placeholder would claim "loading" for a URL the loader may never be asked about. -->
     <Border x:Name="AvatarSlot" Grid.Column="0" Width="48" Height="48"
-            Margin="0,0,8,0" VerticalAlignment="Top" CornerRadius="4" />
+            Margin="0,0,8,0" VerticalAlignment="Top" CornerRadius="4" ClipToBounds="True">
+      <Image x:Name="AvatarImage" Stretch="UniformToFill" />
+    </Border>
 
     <Panel Grid.Column="1">
       <StackPanel Spacing="1">

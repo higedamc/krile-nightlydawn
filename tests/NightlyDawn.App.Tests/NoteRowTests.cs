@@ -101,4 +101,27 @@ public class NoteRowTests
         Assert.Equal(NoteRow.FormatAbsoluteTime(1_700_000_000), row.AbsoluteTimeLabel);
         Assert.NotEqual(row.TimeLabel, row.AbsoluteTimeLabel);
     }
+
+    [Fact]
+    public void From_CarriesTheProfilePicture_AsTheAvatarUrl_Verbatim()
+    {
+        var note = TestNotes.Make(1, 1);
+
+        // Verbatim, including a scheme the loader will reject: validation is the loader's job, not the row's,
+        // and a row must not grow a second, weaker copy of those rules.
+        Assert.Equal("https://cdn.example/a.png", NoteRow.From(note, new Profile(TestNotes.Author, Picture: "https://cdn.example/a.png")).AvatarUrl);
+        Assert.Equal("file:///etc/passwd", NoteRow.From(note, new Profile(TestNotes.Author, Picture: "file:///etc/passwd")).AvatarUrl);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void From_WithoutAPicture_HasNoAvatarUrl(string? picture)
+    {
+        var note = TestNotes.Make(1, 1);
+
+        Assert.Null(NoteRow.From(note).AvatarUrl);
+        Assert.Null(NoteRow.From(note, new Profile(TestNotes.Author, Picture: picture)).AvatarUrl);
+    }
 }

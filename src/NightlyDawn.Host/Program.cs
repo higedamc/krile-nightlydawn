@@ -1,6 +1,7 @@
 using Avalonia;
 using NightlyDawn.App;
 using NightlyDawn.Keys;
+using NightlyDawn.Storage;
 
 namespace NightlyDawn.Host;
 
@@ -70,18 +71,27 @@ internal static class Program
 
         // Local NIP-49 key store (leaf 1b), wired here so the App only ever sees Core's IKeyStore. The timeline
         // never consults it: reading public notes needs no key, and the Keys panel is the only consumer.
+        RemoteImageLoader? remoteImageLoader = null;
         try
         {
             var dataDir = AppDataPaths.ResolveFromEnvironment();
             var keyFile = AppDataPaths.EnsureLocalKeyFile(dataDir);
             AppServices.KeyStore = new LocalKeyStore(new FileKeyFileStore(keyFile));
             Console.Error.WriteLine($"[NightlyDawn] data dir: {dataDir}");
+
+            // Avatars (L6b): the one sanctioned fetcher for relay-supplied picture URLs, caching under the data
+            // dir. Lives inside this try on purpose -- no data directory, no disk cache, no avatars -- and
+            // setting AppServices.RemoteImageLoader to null here (or never) is the whole off switch (plan §26.4).
+            remoteImageLoader = new RemoteImageLoader(AppDataPaths.AvatarCacheDirectory(dataDir));
+            AppServices.RemoteImageLoader = remoteImageLoader;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             // No data directory means no key store; the timeline still works. The panel shows the store as unavailable.
             Console.Error.WriteLine($"[NightlyDawn] key store unavailable: {ex.GetType().Name}");
         }
+
+        Console.Error.WriteLine($"[NightlyDawn] avatars: {(AppServices.RemoteImageLoader is null ? "off (no data dir)" : "on, every author (plan §26.4)")}");
 
         // Publishing shares the timeline's backend and relay pool (L3c). No key store means no publisher: the App
         // layer reads AppServices.NotePublisher through a Func<INotePublisher?> and reports publishing as
@@ -95,6 +105,10 @@ internal static class Program
         }
         finally
         {
+            // Null first, dispose second: a row view that starts a load after this point sees "off" rather than
+            // a disposed client (which the loader would report as a cancelled fetch -- null -- anyway).
+            AppServices.RemoteImageLoader = null;
+            remoteImageLoader?.Dispose();
             timelineSourceFactory.DisposeAsync().AsTask().GetAwaiter().GetResult();
         }
     }

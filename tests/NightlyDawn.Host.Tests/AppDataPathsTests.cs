@@ -48,4 +48,15 @@ public class AppDataPathsTests
             Directory.Delete(dir, recursive: true);
         }
     }
+
+    [Fact]
+    public void AvatarCacheDirectory_IsInsideTheDataDir_AndIsNotCreatedByResolvingIt()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "nd-" + Guid.NewGuid().ToString("N"));
+
+        var cacheDir = AppDataPaths.AvatarCacheDirectory(dir);
+
+        Assert.Equal(Path.Combine(dir, AppDataPaths.AvatarCacheDirectoryName), cacheDir);
+        Assert.False(Directory.Exists(cacheDir)); // the loader creates it on the first successful fetch
+    }
 }
