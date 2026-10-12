@@ -31,4 +31,9 @@ public sealed partial class TabStripView : UserControl
             ViewModel?.CloseTab(tab);
         }
     }
+
+    private void OnSubscribeClick(object? sender, RoutedEventArgs e) => ViewModel?.SelectedTab?.Subscribe();
+
+    private void OnCloseSelectedTabClick(object? sender, RoutedEventArgs e) =>
+        ViewModel?.SelectedTab?.RequestClose?.Invoke();
 }

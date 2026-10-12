@@ -10,7 +10,7 @@
   <DockPanel>
     <Button x:Name="AddTabButton" DockPanel.Dock="Right" Content="+ Tab" Click="OnAddTabClick" />
 
-    <ItemsControl x:Name="TabStrip" ItemsSource="{Binding Tabs}">
+    <ItemsControl x:Name="TabStrip" DockPanel.Dock="Left" ItemsSource="{Binding Tabs}">
       <ItemsControl.ItemsPanel>
         <ItemsPanelTemplate>
           <StackPanel Orientation="Horizontal" Spacing="4" />
@@ -32,5 +32,19 @@
         </DataTemplate>
       </ItemsControl.ItemTemplate>
     </ItemsControl>
+
+    <!-- QueryBox/SubscribeButton/× for the selected tab, sharing this row instead of TimelineView's own
+         docked row (plan §22.3 / L4b-2): the tab strip has ~500 DIP of unused width to the right of one tab
+         header, and the query row's ~40 DIP of vertical chrome was what pushed Linux's TimelineList under
+         the 600x60 floor (plan §22.2). RequestClose stays the contract CloseTab wires on AddTab; only who
+         presses it moved. -->
+    <Grid ColumnDefinitions="*,Auto,Auto" Margin="8,0,0,0" DataContext="{Binding SelectedTab}">
+      <TextBox x:Name="QueryBox" Grid.Column="0" MinWidth="420"
+               Text="{Binding Query, Mode=TwoWay}"
+               PlaceholderText="from home   |   from user(npub1...)   |   from search(&quot;nostr&quot;)" />
+      <Button x:Name="SubscribeButton" Grid.Column="1" Margin="8,0,0,0" Content="Subscribe" IsDefault="True"
+              Click="OnSubscribeClick" />
+      <Button x:Name="CloseTabButton" Grid.Column="2" Margin="4,0,0,0" Content="×" Click="OnCloseSelectedTabClick" />
+    </Grid>
   </DockPanel>
 </UserControl>
