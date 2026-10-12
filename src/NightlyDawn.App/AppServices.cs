@@ -37,6 +37,18 @@ public static class AppServices
     /// directory (the disk cache has nowhere to live).</summary>
     public static IRemoteImageLoader? RemoteImageLoader { get; set; }
 
+    /// <summary>The layout store the host constructed (Core's <see cref="IAppStateStore"/>; today
+    /// <c>NightlyDawn.Storage.JsonAppStateStore</c> on the data directory, L9). Same null-tolerant pattern as
+    /// <see cref="KeyStore"/> and <see cref="RemoteImageLoader"/>: <b>null means no persistence at all</b> --
+    /// <see cref="MainWindow"/> neither restores nor saves, the built-in one-column layout is used for the
+    /// process lifetime, and nothing is written anywhere. That is what a designer preview, a host without a data
+    /// directory, and every render test that does not set this get. The <em>store</em> is what goes here, not a
+    /// loaded <see cref="AppState"/>: the restore (and so the untrusted-file handling in the store's
+    /// <c>LoadAsync</c>) runs inside the App layer, <see cref="Persistence.LayoutPersistence"/>, so a test that
+    /// points this at a real file on disk exercises the same parse-and-fall-back path the shipped host does
+    /// (plan §32.7).</summary>
+    public static IAppStateStore? AppStateStore { get; set; }
+
     /// <summary>The theme variant the host chose, read once by <see cref="App.Initialize"/> (L1). Defaults to
     /// <see cref="AppTheme.System"/> = follow the OS, which is also what a designer preview and any host that does
     /// not set it get. The host reads <c>NIGHTLYDAWN_THEME</c>; see <see cref="Theming.ThemeController"/>.</summary>

@@ -10,6 +10,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using NightlyDawn.App.Composing;
 using NightlyDawn.App.Keys;
+using NightlyDawn.App.Persistence;
 using NightlyDawn.App.Theming;
 using NightlyDawn.App.Timelines;
 using NightlyDawn.App.Views;
@@ -25,7 +26,14 @@ public sealed partial class MainWindow : Window
     private readonly WorkspaceViewModel _workspace;
     private readonly KeyPanelViewModel _keys;
     private readonly ThemeSwitcherViewModel _theme;
+    private readonly LayoutPersistence? _persistence;
     private KeyPanelState _lastKeyState = KeyPanelState.Unavailable;
+
+    /// <summary>How long <see cref="LayoutPersistence.FlushOnClose"/> may hold the window's close for the last
+    /// save (L9, plan §32.3: "never block shutdown indefinitely"). A few kilobytes plus two fsyncs is
+    /// milliseconds on a healthy disk; two seconds is the line past which the user would rather lose the last
+    /// edit than wait.</summary>
+    private static readonly TimeSpan CloseFlushTimeout = TimeSpan.FromSeconds(2);
 
     public MainWindow()
     {
@@ -51,11 +59,28 @@ public sealed partial class MainWindow : Window
 
         // Theme switch (L8): the only mutable state it needs is the running Application's variant, so it is
         // independent of the workspace and of the key store. Seeded from the host's choice; the choice made here
-        // is not written back to AppServices (see ThemeSwitcherViewModel) and is not persisted (that is L9).
+        // is not written back to AppServices (see ThemeSwitcherViewModel). Persisted since L9, below.
         _theme = new ThemeSwitcherViewModel(
             AppServices.Theme,
             theme => ThemeController.Apply(Application.Current!, theme));
         this.FindControl<ThemeSwitcherView>("ThemeSwitcher")!.Attach(_theme);
+
+        // Layout persistence (L9, plan §32): restore here, in the constructor, before the window is ever shown
+        // and before LayoutPersistence starts listening -- so the default layout built two statements up is
+        // never on screen long enough to be edited, and never saved (plan §32.7's two ordering rules;
+        // [[persisted-default-erases-unset]]). The load is a small local file read, synchronous on purpose: a
+        // few milliseconds before first paint, against a visible layout swap and an arming race if it were
+        // deferred to Opened. Null store = no persistence at all (designer, render tests that do not opt in,
+        // host without a data dir), exactly like KeyStore/RemoteImageLoader.
+        if (AppServices.AppStateStore is { } appStateStore)
+        {
+            _persistence = new LayoutPersistence(
+                appStateStore,
+                _workspace,
+                _theme,
+                report: problem => Console.Error.WriteLine($"[NightlyDawn] layout: {problem}"));
+            _persistence.Restore();
+        }
 
         // Keys panel: talks to Core's IKeyStore only (the host constructs the real store). Independent of the workspace,
         // except for the notification wired below (L5j, plan §18.2 item 4).
@@ -64,7 +89,17 @@ public sealed partial class MainWindow : Window
         this.FindControl<KeysPanelView>("KeysPanel")!.Attach(_keys);
 
         Opened += OnOpened;
-        Closed += (_, _) => _workspace.Dispose();
+        Closed += OnClosed;
+    }
+
+    /// <summary>Last save first, then the workspace: the flush must read the columns before Dispose tears them
+    /// down. Bounded by <see cref="CloseFlushTimeout"/> so a stuck disk cannot keep the window (and the process
+    /// behind it) alive -- an unsaved last edit is the lesser failure.</summary>
+    private void OnClosed(object? sender, EventArgs e)
+    {
+        _persistence?.FlushOnClose(CloseFlushTimeout);
+        _persistence?.Dispose();
+        _workspace.Dispose();
     }
 
     /// <summary>

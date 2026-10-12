@@ -84,6 +84,15 @@ internal static class Program
             // setting AppServices.RemoteImageLoader to null here (or never) is the whole off switch (plan §26.4).
             remoteImageLoader = new RemoteImageLoader(AppDataPaths.AvatarCacheDirectory(dataDir));
             AppServices.RemoteImageLoader = remoteImageLoader;
+
+            // Layout persistence (L9): the host only decides *where* the file lives and hands the store over. The
+            // restore itself -- including every "this file cannot be trusted, start with the defaults" decision --
+            // runs in the App layer (LayoutPersistence), so the render tests measure the shipped path by pointing
+            // this same store type at a temp directory (plan §32.7). Problems are one stderr line each, filtered
+            // through Printable like every other value that did not originate in this process (CWE-117).
+            AppServices.AppStateStore = new JsonAppStateStore(
+                AppDataPaths.AppStateFile(dataDir),
+                problem => Console.Error.WriteLine($"[NightlyDawn] layout: {Printable(problem)}"));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -92,6 +101,7 @@ internal static class Program
         }
 
         Console.Error.WriteLine($"[NightlyDawn] avatars: {(AppServices.RemoteImageLoader is null ? "off (no data dir)" : "on, every author (plan §26.4)")}");
+        Console.Error.WriteLine($"[NightlyDawn] layout: {(AppServices.AppStateStore is JsonAppStateStore store ? $"persisted at {store.FilePath}" : "not persisted (no data dir)")}");
 
         // Publishing shares the timeline's backend and relay pool (L3c). No key store means no publisher: the App
         // layer reads AppServices.NotePublisher through a Func<INotePublisher?> and reports publishing as

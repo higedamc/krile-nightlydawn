@@ -101,14 +101,47 @@ public class ContractTests
         Assert.Empty(publicConstructors);
     }
 
+    /// <summary>Plan §32.1 (L9): columns are on the outside and tabs on the inside, matching the running UI
+    /// since §21.2. The 0d-era <c>Tab(Id, Title, Columns)</c> this used to construct no longer exists.</summary>
     [Fact]
-    public void Tab_HoldsOrderedTimelineColumns()
+    public void Column_HoldsOrderedTabs_AndNamesItsSelectedOne()
     {
         var home = new Timeline("home", "Home", "from home");
         var mentions = new Timeline("mentions", "Mentions", "from mentions");
 
-        var tab = new Tab("main", "Main", [home, mentions]);
+        var column = new Column("left", [home, mentions], SelectedTabId: "mentions");
 
-        Assert.Equal(["home", "mentions"], tab.Columns.Select(c => c.Id));
+        Assert.Equal(["home", "mentions"], column.Tabs.Select(t => t.Id));
+        Assert.Equal("mentions", column.SelectedTabId);
+    }
+
+    /// <summary>The reshape kept <see cref="AppState.SchemaVersion"/> at 1 on purpose (no 0d-shaped file was
+    /// ever written, so there is nothing to migrate -- the record's doc says so). This pins both that number and
+    /// the "empty columns, no active column, default settings" meaning of <see cref="AppState.Default"/>, which
+    /// the app relies on to mean "build the built-in layout and do not save it".</summary>
+    /// <summary>Plan §32.3's "write no secret" starts here: the record a store serializes has exactly these four
+    /// members, so there is no field through which key material, a passphrase or a signer handle could reach the
+    /// file. A fifth public property on <see cref="AppState"/> should be a deliberate, reviewed change.</summary>
+    [Fact]
+    public void AppState_CarriesExactlyTheFourLayoutFields()
+    {
+        var names = typeof(AppState).GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Select(p => p.Name).OrderBy(n => n, StringComparer.Ordinal).ToArray();
+
+        Assert.Equal(["ActiveColumnId", "Columns", "SchemaVersion", "Settings"], names);
+        Assert.Equal(["Id", "SelectedTabId", "Tabs"], typeof(Column).GetProperties(BindingFlags.Public | BindingFlags.Instance).Select(p => p.Name).OrderBy(n => n, StringComparer.Ordinal));
+        Assert.Equal(["Id", "KqlQuery", "Title"], typeof(Timeline).GetProperties(BindingFlags.Public | BindingFlags.Instance).Select(p => p.Name).OrderBy(n => n, StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void AppStateDefault_IsSchemaVersion1_WithNoColumns()
+    {
+        var state = AppState.Default;
+
+        Assert.Equal(1, state.SchemaVersion);
+        Assert.Equal(AppState.CurrentSchemaVersion, state.SchemaVersion);
+        Assert.Empty(state.Columns);
+        Assert.Null(state.ActiveColumnId);
+        Assert.Equal(new Settings(), state.Settings);
     }
 }
