@@ -51,6 +51,17 @@ namespace NightlyDawn.App.RenderTests;
 /// <em>before</em> the restore instead of after turns <see cref="SavedFile_ComesBackAsColumnsTabsQueriesAndTheme"/>
 /// red at its last assertion -- the file was rewritten on close although the user changed nothing -- and
 /// <c>LayoutPersistenceTests.Restore_ItselfNeverSaves_EvenThoughItChangesEverything</c> red in App.Tests.</para>
+///
+/// <para>L9-2 (plan §34) added the producer-side bounds and four more mutations, run the same way: (7) removing
+/// <c>MaxLength</c> from <c>QueryBox</c> turns <see cref="OverlongQuery_IsCutAtTheContractBound_AndTheNextLaunchRestoresIt"/>
+/// red at the first assertion (4,097 characters taken, not 4,096). (8) <c>CanAddColumn => true</c> turns
+/// <see cref="AddColumnButton_DisablesAtTheContractBound_AndTheNextLaunchRestoresEveryColumn"/> red at the
+/// disabled-button assertion, and with that assertion taken out as well, red at "must be saved on close": the
+/// 33rd column made the store refuse the whole layout, which is exactly the silent loss this bound exists to
+/// prevent. (9) <c>CanAddTab => true</c> likewise for <see cref="AddTabButton_DisablesAtTheContractBound_AndTheNextLaunchRestoresEveryTab"/>
+/// (and, without the button assertion, the next launch shows 1 tab, not 32). (10) applying the theme inside the
+/// "has columns" branch again turns <see cref="SettingsOnlyFile_AppliesTheTheme_AndKeepsTheBuiltInLayout"/> red
+/// (Default, not Dark). Each (8)/(9) also turns its App.Tests counterpart red.</para>
 /// </summary>
 public sealed class LayoutPersistenceRenderTests
 {
@@ -266,6 +277,140 @@ public sealed class LayoutPersistenceRenderTests
         Assert.DoesNotContain(signer.Pubkey, json, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>L9-2 (plan §34), acceptance ①: <see cref="AppState.MaxQueryLength"/> + 1 characters entered through
+    /// the real <c>QueryBox</c>. Before this, the store's write-side check was the only owner of the bound: the
+    /// over-long text was accepted by the TextBox, <c>SaveAsync</c> threw for it, and every later save -- including
+    /// unrelated, legal changes like the column added below -- failed for the rest of the session, reported only
+    /// on stderr (Lead's probes A and D). Now the TextBox's <c>MaxLength</c> is the contract's constant, so what
+    /// the user sees is what is saved, and the next launch shows it. The legal change made afterwards is part of
+    /// the assertion: that is the work probe D showed being lost.</summary>
+    [AvaloniaFact]
+    public void OverlongQuery_IsCutAtTheContractBound_AndTheNextLaunchRestoresIt()
+    {
+        using var dir = new StateDirectory();
+        var pasted = new string('x', AppState.MaxQueryLength + 1);
+        var expected = pasted[..AppState.MaxQueryLength];
+
+        using (var first = new Session(dir))
+        {
+            first.Click(first.Find<ToggleButton>("SettingsToggle")!);
+            var queryBox = first.Find<TextBox>("QueryBox") ?? throw new Xunit.Sdk.XunitException("QueryBox not found");
+            queryBox.Focus();
+            first.Window.KeyTextInput(pasted); // One paste-sized input, the way probe A did it.
+            first.Pump();
+
+            // What the user sees: the text stopped at the bound, nothing past it was taken.
+            Assert.Equal(AppState.MaxQueryLength, queryBox.Text!.Length);
+            Assert.Equal(expected, queryBox.Text);
+
+            first.Click(first.Find<Button>("AddColumnButton")!); // The unrelated, legal change probe D lost.
+            Assert.Equal(2, first.FindAll<DockPanel>("ColumnRoot").Count);
+        }
+
+        Assert.True(File.Exists(dir.StatePath), "the layout with the bounded query must have been saved on close");
+
+        using (var second = new Session(dir))
+        {
+            Assert.Equal(2, second.FindAll<DockPanel>("ColumnRoot").Count);
+            // The visual tree, then the view model. Read from the tab header rather than by opening the settings
+            // popup: a header shows the whole live query (pre-existing L4b layout, not this leaf's), so a
+            // 4,096-character one pushes the first column's gear to x ~ 28,800, outside a 1280-wide window.
+            Assert.Equal(expected, second.FindAll<Button>("TabHeaderButton")[0].Content?.ToString());
+            var workspace = (WorkspaceViewModel)second.Window.DataContext!;
+            Assert.Equal(expected, workspace.Columns[0].Tabs[0].Query);
+        }
+
+        Assert.Empty(dir.Problems);
+    }
+
+    /// <summary>L9-2 (plan §34), acceptance ① for the column count (Lead's probe B: 37 columns, nothing saved on
+    /// close). <c>AddColumnButton</c> is clicked with real pointer input until the view model says the bound is
+    /// reached; the button must then be disabled -- not pressable-and-inert, the shape L4c ④ rejected -- and one
+    /// more click must change nothing. The next launch shows every column, which it could not if a 33rd had been
+    /// let in.</summary>
+    [AvaloniaFact]
+    public void AddColumnButton_DisablesAtTheContractBound_AndTheNextLaunchRestoresEveryColumn()
+    {
+        using var dir = new StateDirectory();
+
+        using (var first = new Session(dir))
+        {
+            var button = first.Find<Button>("AddColumnButton") ?? throw new Xunit.Sdk.XunitException("AddColumnButton not found");
+            Assert.True(button.IsEnabled);
+            for (var i = 1; i < AppState.MaxColumns; i++)
+            {
+                first.Click(button);
+            }
+
+            Assert.Equal(AppState.MaxColumns, first.FindAll<DockPanel>("ColumnRoot").Count);
+            Assert.False(button.IsEnabled, "at the bound the button must be disabled, not a dead button");
+
+            first.Click(button); // A click on a disabled button: nothing may happen.
+            Assert.Equal(AppState.MaxColumns, first.FindAll<DockPanel>("ColumnRoot").Count);
+        }
+
+        Assert.True(File.Exists(dir.StatePath), "a full layout is still a legal layout and must be saved on close");
+
+        using (var second = new Session(dir))
+        {
+            Assert.Equal(AppState.MaxColumns, second.FindAll<DockPanel>("ColumnRoot").Count);
+            Assert.False(second.Find<Button>("AddColumnButton")!.IsEnabled); // Restored full means restored disabled.
+        }
+
+        Assert.Empty(dir.Problems);
+    }
+
+    /// <summary>Same as the column case, one level down, through the real <c>AddTabButton</c>. The window is wide
+    /// enough for all the tab headers (32 of them push the right-docked button to x ~ 4,300) so the button stays
+    /// inside it for the pointer.</summary>
+    [AvaloniaFact]
+    public void AddTabButton_DisablesAtTheContractBound_AndTheNextLaunchRestoresEveryTab()
+    {
+        using var dir = new StateDirectory();
+
+        using (var first = new Session(dir, width: 6000))
+        {
+            var button = first.Find<Button>("AddTabButton") ?? throw new Xunit.Sdk.XunitException("AddTabButton not found");
+            for (var i = 1; i < AppState.MaxTabsPerColumn; i++)
+            {
+                first.Click(button);
+            }
+
+            Assert.Equal(AppState.MaxTabsPerColumn, first.FindAll<Button>("TabHeaderButton").Count);
+            Assert.False(button.IsEnabled, "at the bound the button must be disabled, not a dead button");
+
+            first.Click(button);
+            Assert.Equal(AppState.MaxTabsPerColumn, first.FindAll<Button>("TabHeaderButton").Count);
+        }
+
+        using (var second = new Session(dir, width: 6000))
+        {
+            Assert.Equal(AppState.MaxTabsPerColumn, second.FindAll<Button>("TabHeaderButton").Count);
+            Assert.False(second.Find<Button>("AddTabButton")!.IsEnabled);
+        }
+
+        Assert.Empty(dir.Problems);
+    }
+
+    /// <summary>L9-2 (plan §34), Lead's probe E: a file with settings but no columns is one the store accepts, so
+    /// its theme is a saved choice. Before this it was applied only inside the "has columns" branch and dropped.</summary>
+    [AvaloniaFact]
+    public void SettingsOnlyFile_AppliesTheTheme_AndKeepsTheBuiltInLayout()
+    {
+        using var dir = new StateDirectory();
+        dir.WriteState("{\"schemaVersion\":1,\"columns\":[],\"activeColumnId\":null,\"settings\":{\"theme\":\"Dark\"}}");
+        var original = dir.ReadStateBytes();
+
+        using (var session = new Session(dir))
+        {
+            Assert.Equal(ThemeVariant.Dark, Application.Current!.RequestedThemeVariant);
+            Assert.Single(session.FindAll<DockPanel>("ColumnRoot"));
+        }
+
+        Assert.Empty(dir.Problems);
+        Assert.Equal(original, dir.ReadStateBytes()); // Applying a saved theme is not a user change.
+    }
+
     private static string TooManyColumns()
     {
         var columns = Enumerable.Range(0, AppState.MaxColumns + 1).Select(i => $"{{\"id\":\"c{i}\",\"tabs\":[],\"selectedTabId\":null}}");
@@ -312,7 +457,7 @@ public sealed class LayoutPersistenceRenderTests
 
         public MainWindow Window { get; }
 
-        public Session(StateDirectory dir)
+        public Session(StateDirectory dir, double width = 1280)
         {
             _previousTheme = AppServices.Theme;
             _previousVariant = Application.Current!.RequestedThemeVariant;
@@ -324,7 +469,7 @@ public sealed class LayoutPersistenceRenderTests
             AppServices.ScreenshotPath = null;
             AppServices.AppStateStore = dir.NewStore();
 
-            Window = new MainWindow { Width = 1280, Height = 800 };
+            Window = new MainWindow { Width = width, Height = 800 };
             Window.Show();
             HeadlessWindowExtensions.SetRenderScaling(Window, 1.0);
             Dispatcher.UIThread.RunJobs();

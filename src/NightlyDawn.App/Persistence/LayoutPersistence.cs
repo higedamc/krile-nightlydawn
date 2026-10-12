@@ -71,7 +71,8 @@ public sealed class LayoutPersistence : IDisposable
     /// <summary>Loads the saved state, applies it, and starts listening for changes. Call exactly once, on the UI
     /// thread, before the window is shown. Synchronous by design -- see <c>MainWindow</c>'s constructor for why
     /// the few milliseconds are preferred over a visible layout swap. Returns true when a saved layout was applied,
-    /// false when the built-in default stayed (no file, an untrusted file, or a load failure).</summary>
+    /// false when the built-in default stayed (no file, an untrusted file, a load failure, or a file carrying only
+    /// settings -- those are applied regardless of the return value).</summary>
     public bool Restore()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -94,11 +95,20 @@ public sealed class LayoutPersistence : IDisposable
             state = AppState.Default;
         }
 
+        // Layout and settings are restored independently (L9-2, plan §34): a file with no columns but a theme
+        // is a legal state the store accepts, and its theme must not be dropped because the layout half is
+        // empty. What is NOT applied is the Default itself -- no file, or an untrusted one -- because there the
+        // "System" is nobody's choice and the host's own (NIGHTLYDAWN_THEME) must stand.
+        var hasSettings = state.Settings != AppState.Default.Settings;
+        if (hasSettings)
+        {
+            _theme.Selected = ThemeSwitcherViewModel.Options.First(o => o.Value == state.Settings.Theme);
+        }
+
         var restored = false;
         if (state.Columns.Count > 0)
         {
             _workspace.RestoreLayout(state.Columns, state.ActiveColumnId);
-            _theme.Selected = ThemeSwitcherViewModel.Options.First(o => o.Value == state.Settings.Theme);
             restored = true;
         }
 

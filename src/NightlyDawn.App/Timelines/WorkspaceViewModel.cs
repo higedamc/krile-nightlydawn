@@ -59,6 +59,16 @@ public sealed class WorkspaceViewModel : INotifyPropertyChanged, IDisposable
 
     public ObservableCollection<ColumnViewModel> Columns { get; } = [];
 
+    /// <summary>Whether <see cref="AddColumn"/> may be called: false once <see cref="Columns"/> holds
+    /// <see cref="AppState.MaxColumns"/> (L9-2, plan §34). This property is the one owner of that bound on the
+    /// producing side -- <c>WorkspaceView</c>'s <c>AddColumnButton</c> binds <c>IsEnabled</c> to it and
+    /// <see cref="AddColumn"/> refuses when it is false, so there is no state a user can reach from which the
+    /// store's <c>SaveAsync</c> would refuse the layout. Before this property existed the store was the only gate,
+    /// and a 33rd column made every later save fail silently for the rest of the session: the user's work from
+    /// that point on was gone at the next launch (Lead's probe B). Raised through <see cref="PropertyChanged"/>
+    /// whenever <see cref="Columns"/> changes, so the bound button follows it.</summary>
+    public bool CanAddColumn => Columns.Count < AppState.MaxColumns;
+
     public ColumnViewModel? SelectedColumn
     {
         get => _selectedColumn;
@@ -80,9 +90,17 @@ public sealed class WorkspaceViewModel : INotifyPropertyChanged, IDisposable
     public IPublishedNoteSink? ActiveSink => SelectedColumn?.SelectedTab ?? SelectedColumn?.Tabs.FirstOrDefault();
 
     /// <summary>Adds a new column (with one tab, same as the default) and selects it. Plan §11.5: no
-    /// name-edit UI, no persistence -- process lifetime only.</summary>
+    /// name-edit UI. Throws <see cref="InvalidOperationException"/> when <see cref="CanAddColumn"/> is false:
+    /// the button that calls this is disabled in that state, so reaching the throw means a caller skipped the
+    /// precondition, which is a programming error and not something to swallow (plan §34: a button that can be
+    /// pressed and does nothing is the shape L4c ④ rejected; a disabled one is honest).</summary>
     public ColumnViewModel AddColumn()
     {
+        if (!CanAddColumn)
+        {
+            throw new InvalidOperationException($"The workspace already holds {AppState.MaxColumns} columns, the most a saved layout can carry (AppState.MaxColumns); check CanAddColumn first.");
+        }
+
         var column = NewColumn();
         Columns.Add(column);
         SelectedColumn = column;
@@ -212,6 +230,7 @@ public sealed class WorkspaceViewModel : INotifyPropertyChanged, IDisposable
             }
         }
 
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanAddColumn)));
         LayoutChanged?.Invoke(this, EventArgs.Empty);
     }
 

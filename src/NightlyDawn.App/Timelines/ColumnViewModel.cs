@@ -3,6 +3,7 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using NightlyDawn.Core;
 
 namespace NightlyDawn.App.Timelines;
 
@@ -64,6 +65,13 @@ public sealed class ColumnViewModel : INotifyPropertyChanged, IDisposable
     /// <see cref="WorkspaceViewModel.ActiveSink"/> is what turns an empty column into a null compose target.</summary>
     public ObservableCollection<TimelineViewModel> Tabs { get; } = [];
 
+    /// <summary>Whether <see cref="AddTab"/> may be called: false once <see cref="Tabs"/> holds
+    /// <see cref="AppState.MaxTabsPerColumn"/> (L9-2, plan §34). The one producer-side owner of that bound, the
+    /// same way <see cref="WorkspaceViewModel.CanAddColumn"/> owns the column count: <c>TabStripView</c>'s
+    /// <c>AddTabButton</c> binds <c>IsEnabled</c> to it and <see cref="AddTab"/> refuses when it is false. Raised
+    /// through <see cref="PropertyChanged"/> whenever <see cref="Tabs"/> changes.</summary>
+    public bool CanAddTab => Tabs.Count < AppState.MaxTabsPerColumn;
+
     /// <summary>Null when <see cref="Tabs"/> is empty.</summary>
     public TimelineViewModel? SelectedTab
     {
@@ -77,9 +85,16 @@ public sealed class ColumnViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    /// <summary>Builds a new tab through the factory, appends it, and selects it.</summary>
+    /// <summary>Builds a new tab through the factory, appends it, and selects it. Throws
+    /// <see cref="InvalidOperationException"/> when <see cref="CanAddTab"/> is false -- see
+    /// <see cref="WorkspaceViewModel.AddColumn"/> for why that is a throw and not a no-op.</summary>
     public TimelineViewModel AddTab()
     {
+        if (!CanAddTab)
+        {
+            throw new InvalidOperationException($"This column already holds {AppState.MaxTabsPerColumn} tabs, the most a saved layout can carry (AppState.MaxTabsPerColumn); check CanAddTab first.");
+        }
+
         var tab = _tabFactory();
         tab.RequestClose = () => CloseTab(tab); // closes over this tab only, same as CreateTab's actionsFactory.
         Tabs.Add(tab);
@@ -142,6 +157,7 @@ public sealed class ColumnViewModel : INotifyPropertyChanged, IDisposable
             }
         }
 
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanAddTab)));
         LayoutChanged?.Invoke(this, EventArgs.Empty);
     }
 

@@ -13,9 +13,10 @@ namespace NightlyDawn.App.Theming;
 /// time anyone touches the control (<c>Core/AppStateContract.cs</c> and
 /// <see cref="ThemeController.ToVariant"/> make the same point).</para>
 ///
-/// <para><b>Deliberately not persisted.</b> A choice made here lasts until the process exits; the next launch is
-/// back to whatever the host passed in. Writing the choice to disk is the layout-persistence leaf's job (L9,
-/// <see cref="Core.IAppStateStore"/>), and doing it here would mean inventing a second store for one enum.</para>
+/// <para><b>Persisted since L9, but not by this class.</b> <see cref="Persistence.LayoutPersistence"/> listens for
+/// <see cref="Selected"/> and writes it with the layout through <see cref="Core.IAppStateStore"/>, and applies
+/// the saved value back here at the next launch. This class still knows nothing about the store: one place
+/// writes the state file, and it is not the theme switch.</para>
 ///
 /// <para><b>Who owns "the current theme".</b> The running <see cref="Avalonia.Application"/> does -- its
 /// <c>RequestedThemeVariant</c> is what the screen reflects. <see cref="AppServices.Theme"/> stays what it says it

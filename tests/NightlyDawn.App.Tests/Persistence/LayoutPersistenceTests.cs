@@ -77,6 +77,26 @@ public sealed class LayoutPersistenceTests
         Assert.Equal([AppTheme.Dark], _applied);
     }
 
+    /// <summary>L9-2 (plan §34, Lead's probe E): a file with settings but no columns passes the store's shape check,
+    /// so its theme is a saved choice and must be applied; only the layout half falls back to the built-in one.
+    /// Before this the theme was applied inside the "has columns" branch and silently dropped here.</summary>
+    [Fact]
+    public async Task Restore_AppliesTheSavedTheme_EvenWhenTheFileHasNoColumns()
+    {
+        _store.LoadResult = new AppState(AppState.CurrentSchemaVersion, [], ActiveColumnId: null, new Settings(Theme: AppTheme.Dark));
+        var builtIn = _workspace.Columns.Single();
+        using var persistence = NewPersistence();
+
+        Assert.False(persistence.Restore()); // No layout was restored...
+        await persistence.FlushAsync();
+
+        Assert.Equal(AppTheme.Dark, _theme.Selected.Value); // ...but the settings were.
+        Assert.Equal([AppTheme.Dark], _applied);
+        Assert.Same(builtIn, _workspace.Columns.Single());
+        Assert.Empty(_store.Saved); // Applying a saved theme is not a user change either.
+        Assert.Empty(_problems);
+    }
+
     [Fact]
     public async Task Restore_WithTheDefaultState_KeepsTheBuiltInLayout_AndNeverSaves()
     {
