@@ -30,6 +30,7 @@
     <ProjectReference Include="..\NightlyDawn.Core\NightlyDawn.Core.csproj" />
     <ProjectReference Include="..\NightlyDawn.Nostr\NightlyDawn.Nostr.csproj" />
     <ProjectReference Include="..\NightlyDawn.Keys\NightlyDawn.Keys.csproj" />
+    <ProjectReference Include="..\NightlyDawn.Filters\NightlyDawn.Filters.csproj" />
   </ItemGroup>
 
   <ItemGroup>

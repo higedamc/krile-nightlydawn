@@ -35,7 +35,7 @@ internal static class KqlCompiler
         "relay",
     };
 
-    public static CompiledFilter Compile(FilterAst ast)
+    public static CompiledFilter Compile(FilterAst ast, string? accountPubkey = null, IReadOnlyList<string>? resolvedFollows = null)
     {
         ArgumentNullException.ThrowIfNull(ast);
 
@@ -47,15 +47,44 @@ internal static class KqlCompiler
         var kinds = new List<int>();
         var authors = new List<string>();
         var tagT = new List<string>();
+        var tagP = new List<string>();
         long? since = null;
         Func<Note, bool>? sourcePredicate = null;
+        // Authors normally means "no author constraint was requested" when empty (see the NostrFilter
+        // construction below), which is correct for every other source. `from home` is the one case where an
+        // empty author list is itself the meaningful answer ("follows nobody yet"), so it must stay an explicit
+        // empty array rather than collapse to "match any author" (plan §13.2 item 4).
+        var authorsConstrained = false;
 
         switch (ast.Source.Kind)
         {
             case FilterSourceKind.Home:
-                throw new UnsupportedFilterFieldException("from home");
+                {
+                    if (resolvedFollows is null)
+                    {
+                        throw new UnsupportedFilterFieldException("from home");
+                    }
+
+                    var follows = resolvedFollows.ToHashSet(StringComparer.Ordinal);
+                    authors.AddRange(follows);
+                    authorsConstrained = true;
+                    sourcePredicate = note => follows.Contains(note.AuthorPubkey);
+                    break;
+                }
+
             case FilterSourceKind.Mentions:
-                throw new UnsupportedFilterFieldException("from mentions");
+                {
+                    if (accountPubkey is null)
+                    {
+                        throw new UnsupportedFilterFieldException("from mentions");
+                    }
+
+                    var pubkey = accountPubkey;
+                    tagP.Add(pubkey);
+                    sourcePredicate = note => note.MentionedPubkeys?.Contains(pubkey, StringComparer.Ordinal) ?? false;
+                    break;
+                }
+
             case FilterSourceKind.List:
                 throw new UnsupportedFilterFieldException("from list");
             case FilterSourceKind.User:
@@ -112,10 +141,25 @@ internal static class KqlCompiler
             kinds.AddRange([(int)NoteKind.Text, (int)NoteKind.Repost, (int)NoteKind.GenericRepost]);
         }
 
+        Dictionary<string, IReadOnlyList<string>>? tagFilters = null;
+        if (tagT.Count > 0 || tagP.Count > 0)
+        {
+            tagFilters = new Dictionary<string, IReadOnlyList<string>>();
+            if (tagT.Count > 0)
+            {
+                tagFilters["t"] = tagT;
+            }
+
+            if (tagP.Count > 0)
+            {
+                tagFilters["p"] = tagP;
+            }
+        }
+
         var relayFilter = new NostrFilter(
-            Authors: authors.Count > 0 ? authors : null,
+            Authors: authorsConstrained ? authors : (authors.Count > 0 ? authors : null),
             Kinds: kinds.Count > 0 ? kinds : null,
-            TagFilters: tagT.Count > 0 ? new Dictionary<string, IReadOnlyList<string>> { ["t"] = tagT } : null,
+            TagFilters: tagFilters,
             Since: since);
 
         Func<Note, bool>? wherePredicate = ast.Where is null ? null : CompileWhere(ast.Where);
@@ -436,6 +480,6 @@ internal static class KqlCompiler
         }
     }
 
-    /// <summary>User-typed text echoed back in an error, bounded so a pasted blob cannot balloon the message (mirrors SimpleTimelineQueryCompiler.Echo).</summary>
+    /// <summary>User-typed text echoed back in an error, bounded so a pasted blob cannot balloon the message.</summary>
     private static string Truncate(string text) => text.Length <= 32 ? text : string.Concat(text.AsSpan(0, 32), "…");
 }

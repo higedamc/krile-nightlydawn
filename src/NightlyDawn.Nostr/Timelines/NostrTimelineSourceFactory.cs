@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NightlyDawn.Core;
+using NightlyDawn.Nostr.ContactLists;
 using NightlyDawn.Nostr.Profiles;
 using NightlyDawn.Nostr.Publishing;
 using NightlyDawn.Nostr.Relay;
@@ -8,12 +9,13 @@ using NightlyDawn.Nostr.Relay;
 namespace NightlyDawn.Nostr.Timelines;
 
 /// <summary>
-/// The relay-backed <see cref="ITimelineSourceFactory"/> (leaf 1e-b). Owns (or borrows) one <see cref="NostrBackend"/>,
-/// connects it lazily on the first stream, and compiles each column's query through <see cref="ITimelineQueryCompiler"/>.
-/// The timeline side is read-only — nothing on the <see cref="Create"/> path signs anything, and no key store is
-/// needed to stream public notes. Signing enters only through <see cref="CreatePublisher"/>, which the host calls
-/// separately and hands its own key store (L3c). <see cref="Create"/> currently ignores the account — account-bound
-/// sources (home = follows, mentions) arrive with the key store and the 1f wiring.
+/// The relay-backed <see cref="ITimelineSourceFactory"/> (leaf 1e-b, query path wired in L5i). Owns (or borrows)
+/// one <see cref="NostrBackend"/>, connects it lazily on the first stream, and compiles each column's query
+/// through <see cref="ITimelineQueryCompiler"/> (<see cref="Create"/> passes <see cref="Account.Pubkey"/> through;
+/// <see cref="CreateAnonymous"/> passes null). The timeline side is read-only — nothing on either path signs
+/// anything, and no key store is needed to stream public notes. Signing enters only through
+/// <see cref="CreatePublisher"/>, which the host calls separately and hands its own key store (L3c). See the
+/// public constructor for why there is no quiet default for the query compiler.
 /// </summary>
 public sealed class NostrTimelineSourceFactory : ITimelineSourceFactory, IAsyncDisposable
 {
@@ -27,27 +29,46 @@ public sealed class NostrTimelineSourceFactory : ITimelineSourceFactory, IAsyncD
     private volatile bool _connected;
 
     /// <param name="relays">Relays to read from. At least one; <c>wss://</c> unless <paramref name="options"/> opts into <c>ws://</c>.</param>
-    public NostrTimelineSourceFactory(IReadOnlyCollection<RelayUrl> relays, NostrBackendOptions? options = null, ILoggerFactory? loggerFactory = null)
+    /// <param name="filterCompiler">KQL parsing and relay-filter compilation (<c>NightlyDawn.Filters.FilterCompiler</c>
+    /// in production). Takes an <see cref="IFilterCompiler"/> rather than a ready-made
+    /// <see cref="ITimelineQueryCompiler"/> so this project never needs a reference to <c>NightlyDawn.Filters</c>:
+    /// this constructor builds the one new piece the KQL layer cannot provide itself — a
+    /// <see cref="NostrContactListSource"/> sharing <em>this</em> factory's backend, for <c>from home</c> — and
+    /// wires it into <see cref="NostrFilterQueryCompiler"/>. No default: a composition root that forgets this
+    /// parameter fails to build, rather than silently falling back to something that cannot resolve <c>from
+    /// home</c> (plan §13.2 item 2 — the earlier mini-language's quiet default was exactly the kind of thing a
+    /// one-line regression could remove without any test noticing).</param>
+    public NostrTimelineSourceFactory(IReadOnlyCollection<RelayUrl> relays, IFilterCompiler filterCompiler, NostrBackendOptions? options = null, ILoggerFactory? loggerFactory = null)
         : this(
             new NostrBackend(options, loggerFactory?.CreateLogger<NostrBackend>()),
             relays,
-            compiler: null,
+            filterCompiler,
+            loggerFactory?.CreateLogger<NostrTimelineSourceFactory>())
+    {
+    }
+
+    private NostrTimelineSourceFactory(NostrBackend backend, IReadOnlyCollection<RelayUrl> relays, IFilterCompiler filterCompiler, ILogger? logger)
+        : this(
+            backend,
+            relays,
+            new NostrFilterQueryCompiler(filterCompiler, new NostrContactListSource(backend)),
             initialLoadTimeout: null,
             ownsBackend: true,
-            logger: loggerFactory?.CreateLogger<NostrTimelineSourceFactory>())
+            logger: logger)
     {
     }
 
     internal NostrTimelineSourceFactory(
         NostrBackend backend,
         IReadOnlyCollection<RelayUrl> relays,
-        ITimelineQueryCompiler? compiler,
+        ITimelineQueryCompiler compiler,
         TimeSpan? initialLoadTimeout,
         bool ownsBackend,
         ILogger? logger)
     {
         ArgumentNullException.ThrowIfNull(backend);
         ArgumentNullException.ThrowIfNull(relays);
+        ArgumentNullException.ThrowIfNull(compiler);
         if (relays.Count == 0)
         {
             throw new ArgumentException("At least one relay is required.", nameof(relays));
@@ -55,7 +76,7 @@ public sealed class NostrTimelineSourceFactory : ITimelineSourceFactory, IAsyncD
 
         _backend = backend;
         _relays = relays;
-        _compiler = compiler ?? new SimpleTimelineQueryCompiler();
+        _compiler = compiler;
         _initialLoadTimeout = initialLoadTimeout ?? backend.Options.FetchTimeout;
         _ownsBackend = ownsBackend;
         _logger = logger ?? NullLogger.Instance;
@@ -95,15 +116,24 @@ public sealed class NostrTimelineSourceFactory : ITimelineSourceFactory, IAsyncD
             TimeProvider.System);
     }
 
-    /// <summary>Read-only for now: the account is not consulted. See the class summary.</summary>
-    public ITimelineSource Create(Timeline timeline, Account account) => CreateAnonymous(timeline);
+    /// <summary>Still read-only — nothing here signs anything — but the account's pubkey is now passed to the
+    /// compiler, so <c>from home</c>/<c>from mentions</c> resolve against it (L5i).</summary>
+    /// <exception cref="FilterParseException">The timeline's query is not understood (thrown here, synchronously, so the UI can report it before any relay traffic).</exception>
+    public ITimelineSource Create(Timeline timeline, Account account)
+    {
+        ArgumentNullException.ThrowIfNull(account);
+        return CreateCore(timeline, account.Pubkey);
+    }
 
     /// <exception cref="FilterParseException">The timeline's query is not understood (thrown here, synchronously, so the UI can report it before any relay traffic).</exception>
-    public ITimelineSource CreateAnonymous(Timeline timeline)
+    /// <exception cref="AccountRequiredException">The query's source is <c>from home</c> or <c>from mentions</c>, which need a signed-in account this (anonymous) path does not have (thrown here, synchronously, same as above — see <see cref="ITimelineSourceFactory.CreateAnonymous"/>'s contract).</exception>
+    public ITimelineSource CreateAnonymous(Timeline timeline) => CreateCore(timeline, accountPubkey: null);
+
+    private ITimelineSource CreateCore(Timeline timeline, string? accountPubkey)
     {
         ArgumentNullException.ThrowIfNull(timeline);
-        var compiled = _compiler.Compile(timeline.KqlQuery);
-        return new NostrTimelineSource(_backend, _backend.Mapper, compiled, EnsureConnectedAsync, _initialLoadTimeout, _backend.Options.MaxRememberedEventIdsPerTimeline, _logger);
+        var compile = _compiler.Compile(timeline.KqlQuery, accountPubkey);
+        return new NostrTimelineSource(_backend, _backend.Mapper, compile, EnsureConnectedAsync, _initialLoadTimeout, _backend.Options.MaxRememberedEventIdsPerTimeline, _logger);
     }
 
     public async ValueTask DisposeAsync()

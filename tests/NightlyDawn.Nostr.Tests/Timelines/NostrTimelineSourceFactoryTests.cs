@@ -1,4 +1,5 @@
 using NightlyDawn.Core;
+using NightlyDawn.Filters;
 using NightlyDawn.Nostr.Tests.Fakes;
 using NightlyDawn.Nostr.Timelines;
 using Xunit;
@@ -18,7 +19,7 @@ namespace NightlyDawn.Nostr.Tests.Timelines;
 public sealed class NostrTimelineSourceFactoryTests
 {
     private static NostrTimelineSourceFactory NewFactory() =>
-        new([RelayUrl.Parse("wss://relay.example/")]);
+        new([RelayUrl.Parse("wss://relay.example/")], new FilterCompiler());
 
     [Fact]
     public async Task CreatePublisher_ReturnsAPublisher()

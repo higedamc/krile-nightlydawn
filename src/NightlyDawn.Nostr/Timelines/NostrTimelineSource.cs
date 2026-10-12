@@ -12,18 +12,54 @@ namespace NightlyDawn.Nostr.Timelines;
 /// first — a relay that never sends EOSE must not keep the column in its loading state forever. Events the mapper
 /// rejects are skipped (and counted by the mapper, B10); the same event seen on several relays is yielded once (B7),
 /// remembering at most <c>maxRememberedIds</c> ids (<see cref="NostrBackendOptions.MaxRememberedEventIdsPerTimeline"/>, FIFO).
+/// <para><paramref name="compile"/> is resolved at most once, the first time either <see cref="StreamAsync"/> or
+/// <see cref="LoadOlderAsync"/> actually needs it, and cached for the lifetime of this source (L5i: this is the
+/// seam where a query like <c>from home</c> does its kind:3 fetch, lazily, so <c>CreateAnonymous</c>/<c>Create</c>
+/// stay synchronous for every query, including ones that are about to fail). Mirrors
+/// <see cref="EnsureConnectedAsync"/>'s "a failed attempt is not remembered" resilience: if <paramref name="compile"/>
+/// faults, the next call retries it rather than replaying the same failure forever.</para>
 /// </summary>
 internal sealed class NostrTimelineSource(
     NostrBackend backend,
     IEventMapper mapper,
-    CompiledFilter filter,
+    Func<CancellationToken, Task<CompiledFilter>> compile,
     Func<CancellationToken, Task> ensureConnected,
     TimeSpan initialLoadTimeout,
     int maxRememberedIds,
     ILogger logger) : ITimelineSource
 {
+    private readonly object _compileGate = new();
+    private Task<CompiledFilter>? _compiledTask;
+
+    private async Task<CompiledFilter> GetCompiledAsync(CancellationToken cancellationToken)
+    {
+        Task<CompiledFilter> task;
+        lock (_compileGate)
+        {
+            task = _compiledTask ??= compile(cancellationToken);
+        }
+
+        try
+        {
+            return await task.ConfigureAwait(false);
+        }
+        catch
+        {
+            lock (_compileGate)
+            {
+                if (ReferenceEquals(_compiledTask, task))
+                {
+                    _compiledTask = null;
+                }
+            }
+
+            throw;
+        }
+    }
+
     public async IAsyncEnumerable<TimelineUpdate> StreamAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        var filter = await GetCompiledAsync(cancellationToken).ConfigureAwait(false);
         await ensureConnected(cancellationToken).ConfigureAwait(false);
 
         var pendingEose = backend.ConnectedRelays.Select(r => r.Value).ToHashSet(StringComparer.Ordinal);
@@ -129,6 +165,7 @@ internal sealed class NostrTimelineSource(
             return [];
         }
 
+        var filter = await GetCompiledAsync(cancellationToken).ConfigureAwait(false);
         await ensureConnected(cancellationToken).ConfigureAwait(false);
 
         var page = filter.RelayFilter with { Until = beforeCreatedAt - 1, Limit = limit };
