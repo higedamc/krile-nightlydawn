@@ -143,6 +143,36 @@ public sealed class AvatarRenderTests
     }
 
     [AvaloniaFact]
+    public void ACacheOrLoaderBug_IsReportedOnStderr_AndDoesNotTakeTheWindowDown()
+    {
+        // L6b-2 (plan §27.6 item 5). GetAsync promises null for everything the remote end controls, and
+        // AvatarDecodeFixtureTests measures that promise; this is the backstop for the day it is wrong. The
+        // loader here throws something no catch list names. Without the backstop the exception leaves an
+        // async void and ends the process -- not a red test, a dead run.
+        using var session = new Session([Session.Note(1, picture: SharedUrl)]);
+        session.Loader.Resolve = _ => throw new InvalidOperationException("synthetic cache bug");
+
+        var original = Console.Error;
+        using var captured = new StringWriter();
+        Console.SetError(captured);
+        try
+        {
+            session.Subscribe();
+            session.Pump(() => captured.ToString().Length > 0, "the backstop never wrote to stderr");
+            session.RunJobsFor(TimeSpan.FromMilliseconds(100));
+        }
+        finally
+        {
+            Console.SetError(original);
+        }
+
+        var line = Assert.Single(captured.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries));
+        Assert.Equal("[NightlyDawn] avatar load failed (InvalidOperationException): synthetic cache bug", line);
+        Assert.Null(Assert.Single(session.Rows()).Image.Source);
+        Assert.Equal(0, AvatarImageCache.Shared.InFlightCount); // the URL is released, not pinned as "loading"
+    }
+
+    [AvaloniaFact]
     public void ARowThatIsGoneBeforeTheFetchCompletes_NeverReceivesTheImage()
     {
         var notes = new List<Note> { Session.Note(1, picture: SharedUrl) };
@@ -182,7 +212,8 @@ public sealed class AvatarRenderTests
         public string RedPng { get; }
 
         /// <summary>The PNG signature followed by garbage: passes the loader's 12-byte container check (which
-        /// is all the real loader does) and fails the decoder. Exactly the file the App side must survive.</summary>
+        /// is all the real loader does) and fails the header reader. Exactly the file the App side must
+        /// survive; the full set of such files is AvatarDecodeFixtureTests.</summary>
         public string CorruptPng { get; }
 
         public Session(IReadOnlyList<Note> notes)

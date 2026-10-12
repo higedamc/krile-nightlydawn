@@ -105,33 +105,47 @@ public sealed partial class NoteRowView : UserControl
     /// <summary>Waits for the cache off the UI thread and hands the result back on it. The result is applied
     /// only if <paramref name="load"/> is still the current load: the row may have been recycled (new
     /// DataContext), detached, or both while the fetch was running (up to the loader's 10 s budget).
-    /// Anything other than cancellation is a bug in the cache or the loader -- both promise null for every
-    /// remote-controlled failure -- and is allowed to surface rather than be swallowed here.</summary>
+    /// Cancellation is the expected way out. Anything else is a bug in the cache or the loader -- both promise
+    /// null for every remote-controlled failure -- and is reported on stderr rather than left to escape: this
+    /// is an <c>async void</c> entry point, where an unhandled exception ends the process, and an avatar is
+    /// decoration. No decoration is worth the window (plan §27.6).</summary>
     private async void LoadAvatarAsync(string url, CancellationTokenSource load)
     {
-        Bitmap? bitmap;
         try
         {
-            bitmap = await AvatarImageCache.Shared.GetAsync(url, load.Token).ConfigureAwait(false);
+            var bitmap = await AvatarImageCache.Shared.GetAsync(url, load.Token).ConfigureAwait(false);
+            if (bitmap is null)
+            {
+                return; // The slot is already empty; no UI-thread hop needed.
+            }
+
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (!ReferenceEquals(_avatarLoad, load) || load.IsCancellationRequested)
+                {
+                    return;
+                }
+
+                _avatarImage.Source = bitmap;
+            });
         }
         catch (OperationCanceledException)
         {
-            return; // Row moved on; nothing to show and nobody to show it to.
+            // Row moved on; nothing to show and nobody to show it to.
         }
-
-        if (bitmap is null)
+        catch (Exception ex)
         {
-            return; // The slot is already empty; no UI-thread hop needed.
+            ReportAvatarFailure(ex);
         }
+    }
 
-        await Dispatcher.UIThread.InvokeAsync(() =>
-        {
-            if (!ReferenceEquals(_avatarLoad, load) || load.IsCancellationRequested)
-            {
-                return;
-            }
-
-            _avatarImage.Source = bitmap;
-        });
+    /// <summary>Backstop output. The URL is deliberately not printed: it is relay-supplied text, and stderr is
+    /// a terminal. The exception's type and message are ours (cache/loader), so they are printed, with control
+    /// characters replaced in case a message quotes remote input.</summary>
+    private static void ReportAvatarFailure(Exception ex)
+    {
+        var line = $"[NightlyDawn] avatar load failed ({ex.GetType().Name}): {ex.Message}";
+        var printable = new string(line.Select(c => c < ' ' || c == '\x7f' ? '?' : c).ToArray());
+        Console.Error.WriteLine(printable);
     }
 }
