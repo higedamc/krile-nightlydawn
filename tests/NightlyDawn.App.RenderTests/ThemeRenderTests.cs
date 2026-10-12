@@ -212,6 +212,19 @@ public sealed class ThemeRenderTests
             HeadlessWindowExtensions.SetRenderScaling(Window, 1.0);
             Dispatcher.UIThread.RunJobs();
 
+            // SubscribeButton lives inside TabSettingsPanel, a Popup collapsed by default (plan §26.5 / L4c
+            // ④, moved behind a Popup by §28.6 ②) -- open it through a real pointer click so the probe below
+            // samples an actually-rendered button, not a collapsed one with stale/zero bounds.
+            // RaiseEvent(Button.ClickEvent) would skip ToggleButton.OnClick() entirely (Lead's §28 review),
+            // leaving IsChecked false and the Popup closed.
+            var settingsToggle = Find<Avalonia.Controls.Primitives.ToggleButton>("SettingsToggle") ?? throw new Xunit.Sdk.XunitException("SettingsToggle not found");
+            var toggleCenter = settingsToggle.TranslatePoint(new Point(settingsToggle.Bounds.Width / 2, settingsToggle.Bounds.Height / 2), Window)
+                ?? throw new Xunit.Sdk.XunitException("SettingsToggle: not attached to the window's visual tree");
+            Window.MouseDown(toggleCenter, Avalonia.Input.MouseButton.Left);
+            Dispatcher.UIThread.RunJobs();
+            Window.MouseUp(toggleCenter, Avalonia.Input.MouseButton.Left);
+            Dispatcher.UIThread.RunJobs();
+
             // L4 replaced MainWindow's DataContext with the workspace shell, so the timeline now lives one
             // tab and one column down. Mirror MainWindowRenderTests rather than casting the shell itself.
             var timeline = ((WorkspaceViewModel)Window.DataContext!).Columns[0].Tabs[0];

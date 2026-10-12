@@ -21,6 +21,7 @@ public sealed class ColumnViewModel : INotifyPropertyChanged, IDisposable
 {
     private readonly Func<TimelineViewModel> _tabFactory;
     private TimelineViewModel? _selectedTab;
+    private double _minWidthHint = 420;
     private bool _disposed;
 
     public ColumnViewModel(Func<TimelineViewModel> tabFactory)
@@ -30,6 +31,18 @@ public sealed class ColumnViewModel : INotifyPropertyChanged, IDisposable
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
+
+    /// <summary>What <see cref="WorkspaceView"/>'s per-column template binds this column's layout root's
+    /// <c>MinWidth</c> to (plan §26.5 / L4c ④). <see cref="WorkspaceViewModel"/> is the only writer -- it
+    /// is the one place that knows how many sibling columns exist, which is what this value needs to react
+    /// to (one column gets room to clear <c>TimelineList</c>'s 600 DIP floor; several share 1280 DIP and
+    /// must not overflow it). 420 is the pre-this-leaf default so a column never renders narrower than it
+    /// used to before <see cref="WorkspaceViewModel"/> runs its first width pass.</summary>
+    public double MinWidthHint
+    {
+        get => _minWidthHint;
+        set => SetField(ref _minWidthHint, value);
+    }
 
     /// <summary>This column's tabs, left-to-right (plan §11.5, carried over). Can reach zero after
     /// <see cref="CloseTab"/> removes the last one -- nothing in this class stops that;

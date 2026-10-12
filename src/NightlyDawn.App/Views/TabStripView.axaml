@@ -8,43 +8,75 @@
        between, not to the window. One instance per column, inside WorkspaceView's per-column template;
        each gets its own NameScope, same as QueryBox/SubscribeButton/TimelineList already do per tab. -->
   <DockPanel>
-    <Button x:Name="AddTabButton" DockPanel.Dock="Right" Content="+ Tab" Click="OnAddTabClick" />
+    <!-- Column head is tab headers + "+ Tab" + a settings toggle only (plan §26.5 / L4c ④ — the screenshot's
+         column head has no query box). QueryBox/SubscribeButton/× moved again below, into TabSettingsPanel,
+         collapsed by default: TabStripView.axaml.cs opens it right after AddTab (an unsubscribed new tab has
+         no other way in) and SettingsToggle flips it the rest of the time. Also removes the ~40 DIP the query
+         row used to cost every column all the time (plan §22.3 / L4b-2), which L4c's ②⑥ spend elsewhere. -->
+    <DockPanel DockPanel.Dock="Top">
+      <Button x:Name="AddTabButton" DockPanel.Dock="Right" Content="+ Tab" Click="OnAddTabClick" />
+      <!-- IsChecked is the single source of truth for open/closed (Lead's §28 review): TabSettingsPanel.IsVisible
+           binds to it below instead of a second, hand-toggled bool, so the toggle's own checked-paint and the
+           panel's visibility can never disagree. ToggleButton flips IsChecked itself on a real click — no
+           Click handler needed here anymore. -->
+      <ToggleButton x:Name="SettingsToggle" DockPanel.Dock="Right" Margin="0,0,4,0" Content="⚙" />
 
-    <ItemsControl x:Name="TabStrip" DockPanel.Dock="Left" ItemsSource="{Binding Tabs}">
-      <ItemsControl.ItemsPanel>
-        <ItemsPanelTemplate>
-          <StackPanel Orientation="Horizontal" Spacing="4" />
-        </ItemsPanelTemplate>
-      </ItemsControl.ItemsPanel>
-      <ItemsControl.ItemTemplate>
-        <DataTemplate x:DataType="tl:TimelineViewModel">
-          <Border Padding="8,4" CornerRadius="4" BorderThickness="1"
-                  BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}">
-            <StackPanel Orientation="Horizontal" Spacing="4">
-              <!-- No persisted/user-set title yet (plan §21.2's "やらないこと": that is step 4's "クエリは
-                   タブの設定へ"); shows the live query each tab was opened with, falling back before the
-                   first Subscribe. -->
-              <Button x:Name="TabHeaderButton" Content="{Binding ActiveTimeline.Title, FallbackValue='(new tab)'}"
-                      Click="OnSelectTabClick" Tag="{Binding}" />
-              <Button x:Name="CloseTabButton" Content="×" Click="OnCloseTabClick" Tag="{Binding}" />
-            </StackPanel>
-          </Border>
-        </DataTemplate>
-      </ItemsControl.ItemTemplate>
-    </ItemsControl>
+      <!-- HorizontalAlignment="Left": DockPanel's LastChildFill ignores the last child's own Dock and gives
+           it all remaining row width regardless (true before §28.6 ③ too, it just didn't show: a column's
+           row was never wider than this ItemsControl's own content). Now that §28.6 ③ stretches a column to
+           fill the window, an unconstrained TabStrip would report a Bounds.Width spanning that whole row's
+           leftover space instead of its tab buttons' actual width — not a visual bug (items stay
+           left-aligned in the extra room), but it breaks anything measuring "where the tab labels end"
+           (ThemeSwitcherRenderTests compares exactly that against the header's theme switch). -->
+      <ItemsControl x:Name="TabStrip" DockPanel.Dock="Left" HorizontalAlignment="Left" ItemsSource="{Binding Tabs}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <StackPanel Orientation="Horizontal" Spacing="4" />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="tl:TimelineViewModel">
+            <Border Padding="8,4" CornerRadius="4" BorderThickness="1"
+                    BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}">
+              <StackPanel Orientation="Horizontal" Spacing="4">
+                <!-- No persisted/user-set title yet (plan §21.2's "やらないこと": that is step 4's "クエリは
+                     タブの設定へ"); shows the live query each tab was opened with, falling back before the
+                     first Subscribe. -->
+                <Button x:Name="TabHeaderButton" Content="{Binding ActiveTimeline.Title, FallbackValue='(new tab)'}"
+                        Click="OnSelectTabClick" Tag="{Binding}" />
+                <Button x:Name="CloseTabButton" Content="×" Click="OnCloseTabClick" Tag="{Binding}" />
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </DockPanel>
 
-    <!-- QueryBox/SubscribeButton/× for the selected tab, sharing this row instead of TimelineView's own
-         docked row (plan §22.3 / L4b-2): the tab strip has ~500 DIP of unused width to the right of one tab
-         header, and the query row's ~40 DIP of vertical chrome was what pushed Linux's TimelineList under
-         the 600x60 floor (plan §22.2). RequestClose stays the contract CloseTab wires on AddTab; only who
-         presses it moved. -->
-    <Grid ColumnDefinitions="*,Auto,Auto" Margin="8,0,0,0" DataContext="{Binding SelectedTab}">
-      <TextBox x:Name="QueryBox" Grid.Column="0" MinWidth="420"
-               Text="{Binding Query, Mode=TwoWay}"
-               PlaceholderText="from home   |   from user(npub1...)   |   from search(&quot;nostr&quot;)" />
-      <Button x:Name="SubscribeButton" Grid.Column="1" Margin="8,0,0,0" Content="Subscribe" IsDefault="True"
-              Click="OnSubscribeClick" />
-      <Button x:Name="CloseSelectedTabButton" Grid.Column="2" Margin="4,0,0,0" Content="×" Click="OnCloseSelectedTabClick" />
-    </Grid>
+    <!-- The tab's settings: just QueryBox/SubscribeButton/× for now (plan §26.5's "タブの設定の形はRengeの裁量").
+         A Popup, not an inline row (Lead's §28 review ①): QueryBox's MinWidth=420 used to sit in the column's
+         own DockPanel, so opening it could force the column wider than its shared budget and overflow the
+         window's 1280 DIP total (measured: 1,104 -> 1,644 DIP with all three open). A Popup renders in the
+         window's overlay layer instead of the column's layout flow, so opening it can never change
+         ColumnsHost's width — not "accept the overflow", the budget question doesn't arise. IsOpen mirrors
+         SettingsToggle.IsChecked two-way, but Popup.IsLightDismissEnabled defaults to False and this binding
+         does not turn it on (Lead's §30 review, measured by hand: clicking outside the Popup, and Escape,
+         both leave IsChecked/IsOpen unchanged). The gear is the only way to close this today, which is
+         consistent, not broken. Turning on light-dismiss is future work, and only after a state-machine
+         test covers the close-via-light-dismiss step: ToggleButton's own IsChecked does not know a dismiss
+         happened, so a naive flip risks the gear re-opening the Popup it was just dismissed from. -->
+    <Popup x:Name="TabSettingsPanel" PlacementTarget="{Binding #SettingsToggle}" Placement="BottomEdgeAlignedRight"
+           IsOpen="{Binding #SettingsToggle.IsChecked, Mode=TwoWay}" DataContext="{Binding SelectedTab}">
+      <Border Padding="8" CornerRadius="4" BorderThickness="1" Background="{DynamicResource KrilePanelBackgroundBrush}"
+              BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}">
+        <Grid ColumnDefinitions="*,Auto,Auto">
+          <TextBox x:Name="QueryBox" Grid.Column="0" MinWidth="420"
+                   Text="{Binding Query, Mode=TwoWay}"
+                   PlaceholderText="from home   |   from user(npub1...)   |   from search(&quot;nostr&quot;)" />
+          <Button x:Name="SubscribeButton" Grid.Column="1" Margin="8,0,0,0" Content="Subscribe" IsDefault="True"
+                  Click="OnSubscribeClick" />
+          <Button x:Name="CloseSelectedTabButton" Grid.Column="2" Margin="4,0,0,0" Content="×" Click="OnCloseSelectedTabClick" />
+        </Grid>
+      </Border>
+    </Popup>
   </DockPanel>
 </UserControl>

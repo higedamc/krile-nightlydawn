@@ -43,26 +43,35 @@ public sealed class MainWindowRenderTests
         SaveFrame(frame!, width, height, scale);
 
         AssertFrameIsNotUniform(frame!, scale);
-        AssertFitsInsideTheWindow(window, "QueryBox");
-        AssertFitsInsideTheWindow(window, "SubscribeButton");
+        // QueryBox/SubscribeButton dropped from this default-layout assertion (plan §26.5 / L4c ④): they now
+        // live inside TabSettingsPanel, collapsed until the gear toggle or AddTab opens it, so a column's
+        // default render has neither visible. WindowChromeRenderTests covers both states (collapsed by
+        // default, visible and usable once opened) -- the thing this test still owns is that the column head
+        // (TabStrip/AddTabButton) and everything else below render without clipping or overflow.
         AssertFitsInsideTheWindow(window, "KeysExpander");
         AssertFitsInsideTheWindow(window, "TimelineList");
         AssertMinimumSize(window, "TimelineList", minWidth: 600, minHeight: 60);
-        AssertTextIsNotClipped(window, "Type a query, press Subscribe, and notes stream into the column below.");
+        // The subtitle this used to check ("Type a query, press Subscribe...") was removed with the rest of
+        // the header row (plan §26.5 / L4c ②): the compose box is the window's top row now, with no heading
+        // above it, matching the screenshot.
     }
 
     /// <summary>Negative control for <see cref="FindByName{T}"/>, the NameScope-crossing lookup <see cref="RenderSession"/>
     /// and <see cref="AssertFitsInsideTheWindow"/> both depend on since 0e-b moved the column and the Keys panel into
     /// their own UserControls (each with its own NameScope; <c>Window.FindControl</c> no longer reaches into them).
     /// A name that exists nowhere in the real tree must come back null -- proving the lookup discriminates by name,
-    /// the way <c>OfType&lt;T&gt;().First()</c> would not (it would silently grab the first control of that type).</summary>
+    /// the way <c>OfType&lt;T&gt;().First()</c> would not (it would silently grab the first control of that type).
+    /// <c>SettingsToggle</c>, not <c>QueryBox</c>, is the positive control here: §28.6 ②'s fix moved
+    /// <c>QueryBox</c> behind a collapsed-by-default <c>Popup</c>, which is not realized in the tree at all
+    /// before the gear is opened (<see cref="WindowChromeRenderTests"/> covers that lifecycle); the gear
+    /// itself is always present and sits in the same per-column NameScope this test exists to cross.</summary>
     [AvaloniaFact]
     public void FindByNameAcrossNameScopes_NegativeControl_WrongNameIsNotFound()
     {
         using var session = new RenderSession(1280, 800, 1.0);
 
         Assert.Null(FindByName<Control>(session.Window, "QueryBoxTypoDoesNotExist"));
-        Assert.NotNull(FindByName<Control>(session.Window, "QueryBox"));
+        Assert.NotNull(FindByName<Control>(session.Window, "SettingsToggle"));
         Assert.NotNull(FindByName<Control>(session.Window, "KeysExpander"));
     }
 

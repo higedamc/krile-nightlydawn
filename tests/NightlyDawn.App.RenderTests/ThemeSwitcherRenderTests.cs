@@ -43,12 +43,15 @@ public sealed class ThemeSwitcherRenderTests
     private const double TimelineFloorHeight = 60;
 
     /// <summary>
-    /// The switch is in the header row beside the title (not above the timeline), does not overlap the workspace,
-    /// and the timeline still clears its floor. A control docked into a new row would pass the first two
-    /// assertions and fail the last.
+    /// The switch is in the compose row beside the compose box (not above the timeline), does not overlap the
+    /// workspace, and the timeline still clears its floor. A control docked into a new row would pass the first
+    /// two assertions and fail the last.
+    /// <para>Rewritten for plan §26.5 (L4c ②): the header title row this used to check beside is gone -- the
+    /// compose box is the window's top row now, and the switch still shares that row with it (plan §26.5 /
+    /// L4c's MainWindow.axaml keeps ThemeSwitcher and ComposeBox in the same DockPanel).</para>
     /// </summary>
     [AvaloniaFact]
-    public void TheSwitchSitsInTheHeaderRowAndCostsTheTimelineNoHeight()
+    public void TheSwitchSitsInTheComposeRowAndCostsTheTimelineNoHeight()
     {
         using var session = new SwitcherSession(AppTheme.Light);
         var window = session.Window;
@@ -56,13 +59,11 @@ public sealed class ThemeSwitcherRenderTests
         var selector = session.Selector;
         var selectorBounds = session.BoundsInWindow(selector);
 
-        var header = window.GetVisualDescendants().OfType<TextBlock>()
-            .FirstOrDefault(tb => tb.Text == "Krile NightlyDawn")
-            ?? throw new Xunit.Sdk.XunitException("header title text block not found");
-        var headerBounds = session.BoundsInWindow(header);
+        var composeBox = session.Find<Control>("ComposeBox") ?? throw new Xunit.Sdk.XunitException("ComposeBox not found");
+        var composeBoxBounds = session.BoundsInWindow(composeBox);
 
-        Assert.True(Math.Abs(selectorBounds.Y - headerBounds.Y) < 20.0,
-            $"the theme switch should sit beside the header title, not in a row of its own; ThemeSelector.Y={selectorBounds.Y:0.#}, header.Y={headerBounds.Y:0.#}");
+        Assert.True(Math.Abs(selectorBounds.Y - composeBoxBounds.Y) < 20.0,
+            $"the theme switch should sit beside the compose box, not in a row of its own; ThemeSelector.Y={selectorBounds.Y:0.#}, ComposeBox.Y={composeBoxBounds.Y:0.#}");
 
         var tabStrip = session.Find<Control>("TabStrip") ?? throw new Xunit.Sdk.XunitException("TabStrip not found");
         var tabStripBounds = session.BoundsInWindow(tabStrip);

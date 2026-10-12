@@ -9,20 +9,26 @@
         MinWidth="480" MinHeight="320">
   <DockPanel Margin="16">
     <!-- The tab strip moved out of this header row and into each column (plan §21.2 / L4b): the PR #30
-         placement put one workspace-wide strip here; the fork's structure gives every column its own. -->
+         placement put one workspace-wide strip here; the fork's structure gives every column its own.
+         The title/subtitle row that used to sit above the compose box is gone (plan §26.5 / L4c ②): the
+         screenshot has no heading, and the compose box is supposed to be the window's topmost row, not the
+         second one. The window's own title bar (x:Class's Title property, below) still reads "Krile
+         NightlyDawn" — that identity did not need an in-window copy. -->
     <DockPanel DockPanel.Dock="Top">
-      <views:ThemeSwitcherView x:Name="ThemeSwitcher" DockPanel.Dock="Right" Margin="12,0,0,0" VerticalAlignment="Center" />
-      <StackPanel Spacing="4">
-        <TextBlock Text="Krile NightlyDawn" FontSize="28" FontWeight="SemiBold" />
-        <TextBlock Text="Type a query, press Subscribe, and notes stream into the column below."
-                   Opacity="0.7" />
-      </StackPanel>
+      <views:ThemeSwitcherView x:Name="ThemeSwitcher" DockPanel.Dock="Right" Margin="12,0,0,0" VerticalAlignment="Top" />
+      <views:ComposeBoxView x:Name="ComposeBox" />
     </DockPanel>
 
     <TextBlock DockPanel.Dock="Bottom" Opacity="0.5" FontSize="12" Margin="0,8,0,0"
                Text="Based on Krile StarryEyes by Karno (MIT). New code (C) 2026 Krile NightlyDawn contributors." />
 
-    <views:ComposeBoxView x:Name="ComposeBox" DockPanel.Dock="Top" Margin="0,12,0,0" />
+    <!-- Status line (plan §26.5 / L4c ⑥): the selected column's selected tab's note count, a thin row just
+         above the copyright line. FallbackValue covers the (SelectedColumn, SelectedTab) chain being briefly
+         null (e.g. a column with zero tabs); WindowChromeRenderTests asserts both the fallback text and the
+         real count after Subscribe, the same before/after shape TabHeaderRenderTests used for plan §24.2's
+         bug — a FallbackValue alone would otherwise mask a binding that never updates. -->
+    <TextBlock x:Name="StatusLine" DockPanel.Dock="Bottom" Opacity="0.6" FontSize="11" Margin="0,4,0,0"
+               Text="{Binding SelectedColumn.SelectedTab.Notes.Count, FallbackValue='0 notes', StringFormat='{}{0} notes'}" />
 
     <views:KeysPanelView x:Name="KeysPanel" DockPanel.Dock="Bottom" Margin="0,12,0,0" />
 
