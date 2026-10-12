@@ -47,7 +47,7 @@ public sealed class MainWindowRenderTests
         AssertFitsInsideTheWindow(window, "SubscribeButton");
         AssertFitsInsideTheWindow(window, "KeysExpander");
         AssertFitsInsideTheWindow(window, "TimelineList");
-        AssertMinimumSize(window, "TimelineList", minWidth: 600, minHeight: 60);
+        AssertMinimumSize(window, "TimelineList", minWidth: 600, minHeight: 99999);
         AssertTextIsNotClipped(window, "Type a query, press Subscribe, and notes stream into the column below.");
     }
 
