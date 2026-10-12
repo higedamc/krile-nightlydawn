@@ -1,7 +1,9 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using NightlyDawn.Core;
 
 namespace NightlyDawn.App.Timelines;
 
@@ -24,13 +26,27 @@ public sealed class ColumnViewModel : INotifyPropertyChanged, IDisposable
     private double _minWidthHint = 420;
     private bool _disposed;
 
-    public ColumnViewModel(Func<TimelineViewModel> tabFactory)
+    /// <param name="id">Identity for layout persistence (L9); a fresh one when null. <see cref="WorkspaceViewModel"/>
+    /// passes a saved column's id back in while restoring, so the saved <c>ActiveColumnId</c> still names it.</param>
+    public ColumnViewModel(Func<TimelineViewModel> tabFactory, string? id = null)
     {
         ArgumentNullException.ThrowIfNull(tabFactory);
         _tabFactory = tabFactory;
+        Id = id ?? Guid.NewGuid().ToString("N");
+        Tabs.CollectionChanged += OnTabsChanged;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
+
+    /// <summary>Raised when something a saved layout records about this column changed (L9): a tab was added
+    /// or removed, the selected tab changed, or a tab's <see cref="TimelineViewModel.Query"/> changed.
+    /// Deliberately <em>not</em> raised for a tab's notes, status or loading state -- those change continuously
+    /// while a stream runs and are not part of the layout. <see cref="WorkspaceViewModel.LayoutChanged"/>
+    /// aggregates this across columns; <see cref="Persistence.LayoutPersistence"/> is the consumer.</summary>
+    public event EventHandler? LayoutChanged;
+
+    /// <summary>Opaque identity for layout persistence (L9): what a saved <c>AppState.ActiveColumnId</c> names.</summary>
+    public string Id { get; }
 
     /// <summary>What <see cref="WorkspaceView"/>'s per-column template binds this column's layout root's
     /// <c>MinWidth</c> to (plan §26.5 / L4c ④). <see cref="WorkspaceViewModel"/> is the only writer -- it
@@ -49,16 +65,36 @@ public sealed class ColumnViewModel : INotifyPropertyChanged, IDisposable
     /// <see cref="WorkspaceViewModel.ActiveSink"/> is what turns an empty column into a null compose target.</summary>
     public ObservableCollection<TimelineViewModel> Tabs { get; } = [];
 
+    /// <summary>Whether <see cref="AddTab"/> may be called: false once <see cref="Tabs"/> holds
+    /// <see cref="AppState.MaxTabsPerColumn"/> (L9-2, plan §34). The one producer-side owner of that bound, the
+    /// same way <see cref="WorkspaceViewModel.CanAddColumn"/> owns the column count: <c>TabStripView</c>'s
+    /// <c>AddTabButton</c> binds <c>IsEnabled</c> to it and <see cref="AddTab"/> refuses when it is false. Raised
+    /// through <see cref="PropertyChanged"/> whenever <see cref="Tabs"/> changes.</summary>
+    public bool CanAddTab => Tabs.Count < AppState.MaxTabsPerColumn;
+
     /// <summary>Null when <see cref="Tabs"/> is empty.</summary>
     public TimelineViewModel? SelectedTab
     {
         get => _selectedTab;
-        set => SetField(ref _selectedTab, value);
+        set
+        {
+            if (SetField(ref _selectedTab, value))
+            {
+                LayoutChanged?.Invoke(this, EventArgs.Empty);
+            }
+        }
     }
 
-    /// <summary>Builds a new tab through the factory, appends it, and selects it.</summary>
+    /// <summary>Builds a new tab through the factory, appends it, and selects it. Throws
+    /// <see cref="InvalidOperationException"/> when <see cref="CanAddTab"/> is false -- see
+    /// <see cref="WorkspaceViewModel.AddColumn"/> for why that is a throw and not a no-op.</summary>
     public TimelineViewModel AddTab()
     {
+        if (!CanAddTab)
+        {
+            throw new InvalidOperationException($"This column already holds {AppState.MaxTabsPerColumn} tabs, the most a saved layout can carry (AppState.MaxTabsPerColumn); check CanAddTab first.");
+        }
+
         var tab = _tabFactory();
         tab.RequestClose = () => CloseTab(tab); // closes over this tab only, same as CreateTab's actionsFactory.
         Tabs.Add(tab);
@@ -99,14 +135,49 @@ public sealed class ColumnViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    private void SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
+    /// <summary>Keeps <see cref="LayoutChanged"/> fed from the tabs themselves: every tab that enters
+    /// <see cref="Tabs"/> (through <see cref="AddTab"/> or a restore) is watched for its <c>Query</c>, every tab that
+    /// leaves is unwatched. Hooked on the collection rather than inside <see cref="AddTab"/> so there is exactly one
+    /// place a tab can enter or leave this column without the layout noticing -- none.</summary>
+    private void OnTabsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.OldItems is not null)
+        {
+            foreach (var tab in e.OldItems.OfType<TimelineViewModel>())
+            {
+                tab.PropertyChanged -= OnTabPropertyChanged;
+            }
+        }
+
+        if (e.NewItems is not null)
+        {
+            foreach (var tab in e.NewItems.OfType<TimelineViewModel>())
+            {
+                tab.PropertyChanged += OnTabPropertyChanged;
+            }
+        }
+
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanAddTab)));
+        LayoutChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void OnTabPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(TimelineViewModel.Query))
+        {
+            LayoutChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    private bool SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
     {
         if (EqualityComparer<T>.Default.Equals(field, value))
         {
-            return;
+            return false;
         }
 
         field = value;
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        return true;
     }
 }

@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:tl="using:NightlyDawn.App.Timelines"
+             xmlns:core="using:NightlyDawn.Core"
              x:Class="NightlyDawn.App.Views.TabStripView"
              x:DataType="tl:ColumnViewModel">
   <!-- Moved from MainWindow's header into each column (plan §21.2 / L4b): the fork nests Tabs inside Columns
@@ -14,7 +15,9 @@
          no other way in) and SettingsToggle flips it the rest of the time. Also removes the ~40 DIP the query
          row used to cost every column all the time (plan §22.3 / L4b-2), which L4c's ②⑥ spend elsewhere. -->
     <DockPanel DockPanel.Dock="Top">
-      <Button x:Name="AddTabButton" DockPanel.Dock="Right" Content="+ Tab" Click="OnAddTabClick" />
+      <!-- IsEnabled follows ColumnViewModel.CanAddTab (L9-2, plan §34): the view model owns the bound
+           (AppState.MaxTabsPerColumn), this only shows it; same shape as WorkspaceView's AddColumnButton. -->
+      <Button x:Name="AddTabButton" DockPanel.Dock="Right" Content="+ Tab" IsEnabled="{Binding CanAddTab}" Click="OnAddTabClick" />
       <!-- IsChecked is the single source of truth for open/closed (Lead's §28 review): TabSettingsPanel.IsVisible
            binds to it below instead of a second, hand-toggled bool, so the toggle's own checked-paint and the
            panel's visibility can never disagree. ToggleButton flips IsChecked itself on a real click — no
@@ -69,7 +72,13 @@
       <Border Padding="8" CornerRadius="4" BorderThickness="1" Background="{DynamicResource KrilePanelBackgroundBrush}"
               BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}">
         <Grid ColumnDefinitions="*,Auto,Auto">
+          <!-- MaxLength is the contract's own constant via x:Static, not a second number (L9-2, plan §34): the
+               TextBox is the one place a user produces a query, and TextBox applies MaxLength to pasted text as
+               well as typed, so a query the store would refuse to save (AppState.MaxQueryLength) cannot be
+               entered. Without it, one over-long paste into any tab made every later save of the whole layout
+               fail for the rest of the session, reported only on stderr (Lead's probes A and D). -->
           <TextBox x:Name="QueryBox" Grid.Column="0" MinWidth="420"
+                   MaxLength="{x:Static core:AppState.MaxQueryLength}"
                    Text="{Binding Query, Mode=TwoWay}"
                    PlaceholderText="from home   |   from user(npub1...)   |   from search(&quot;nostr&quot;)" />
           <Button x:Name="SubscribeButton" Grid.Column="1" Margin="8,0,0,0" Content="Subscribe" IsDefault="True"

@@ -1,5 +1,6 @@
 using NightlyDawn.App.Tests.Fakes;
 using NightlyDawn.App.Timelines;
+using NightlyDawn.Core;
 using Xunit;
 
 namespace NightlyDawn.App.Tests;
@@ -134,8 +135,41 @@ public class ColumnViewModelTests
         var changed = new List<string?>();
         column.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
 
-        column.AddTab(); // raises SelectedTab (set inside AddTab).
+        column.AddTab(); // Tabs changed (so CanAddTab is re-announced, L9-2), then SelectedTab is set inside AddTab.
 
-        Assert.Equal(["SelectedTab"], changed);
+        Assert.Equal(["CanAddTab", "SelectedTab"], changed);
+    }
+
+    [Fact]
+    public void AddTab_StopsAtTheContractBound_AndSaysSoThroughCanAddTab()
+    {
+        var column = new ColumnViewModel(NewTab);
+        var canAddChanges = 0;
+        column.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ColumnViewModel.CanAddTab))
+            {
+                canAddChanges++;
+            }
+        };
+
+        for (var i = 0; i < AppState.MaxTabsPerColumn; i++) // Bounded by the constant: see WorkspaceViewModelTests.
+        {
+            column.AddTab();
+        }
+
+        Assert.False(column.CanAddTab);
+
+        // L9-2 (plan §34): exactly the store's bound, so a column filled through this class is always one the
+        // store will save; before this, the 33rd tab made every later save fail for the rest of the session.
+        Assert.Equal(AppState.MaxTabsPerColumn, column.Tabs.Count);
+        Assert.Equal(AppState.MaxTabsPerColumn, canAddChanges); // One notification per add, including the first.
+
+        var ex = Assert.Throws<InvalidOperationException>(() => column.AddTab());
+        Assert.Contains(nameof(AppState.MaxTabsPerColumn), ex.Message, StringComparison.Ordinal);
+        Assert.Equal(AppState.MaxTabsPerColumn, column.Tabs.Count);
+
+        column.CloseTab(column.Tabs[^1]);
+        Assert.True(column.CanAddTab);
     }
 }

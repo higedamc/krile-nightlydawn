@@ -66,6 +66,13 @@ public sealed class TimelineViewModel : INotifyPropertyChanged, IDisposable, IPu
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
+    /// <summary>Opaque identity for layout persistence (L9): what <c>Column.SelectedTabId</c> in a saved
+    /// <see cref="AppState"/> refers to, and what the next launch hands back so the same tab is selected again.
+    /// Fresh per instance; <see cref="WorkspaceViewModel"/> overwrites it while restoring a saved layout, which is
+    /// the only writer and the reason the setter is internal. Not the <see cref="Timeline.Id"/> inside
+    /// <see cref="ActiveTimeline"/> -- that one changes on every <see cref="Subscribe"/>.</summary>
+    public string Id { get; internal set; } = Guid.NewGuid().ToString("N");
+
     /// <summary>Newest first. Mutated only via <c>postToUi</c>.</summary>
     public ObservableCollection<NoteRow> Notes { get; } = [];
 

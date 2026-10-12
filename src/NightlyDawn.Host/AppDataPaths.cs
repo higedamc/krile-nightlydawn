@@ -17,6 +17,15 @@ public static class AppDataPaths
     /// the directory is the cache's only refresh mechanism in v1 (the loader never expires entries).</summary>
     public const string AvatarCacheDirectoryName = "avatar-cache";
 
+    /// <summary>The one layout/settings file <c>JsonAppStateStore</c> reads and writes (L9, plan §32.2). Beside
+    /// the key file inside the 0700 data dir and itself 0600: which queries a user keeps open is a record of what
+    /// they read. Never created by the host -- the store writes it on the first save and reads its absence as
+    /// "use the defaults" (<c>Core/AppStateContract.cs</c>, [[persisted-default-erases-unset]]).</summary>
+    public const string AppStateFileName = "app-state.json";
+
+    /// <summary>The layout/settings file path for <paramref name="dataDir"/>.</summary>
+    public static string AppStateFile(string dataDir) => Path.Combine(dataDir, AppStateFileName);
+
     /// <summary>The avatar cache directory for <paramref name="dataDir"/>. Not created here: the loader creates
     /// it on the first successful fetch, so a run that never shows an avatar leaves no empty directory.</summary>
     public static string AvatarCacheDirectory(string dataDir) => Path.Combine(dataDir, AvatarCacheDirectoryName);

@@ -7,6 +7,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\NightlyDawn.Core\NightlyDawn.Core.csproj" />
+    <!-- For NativeFileSync only (JsonAppStateStore's durable write, L9): the fsync primitive lives in Keys because
+         FileKeyFileStore needed it first, and Core/AppStateContract.cs tells an IAppStateStore implementation to
+         reuse it rather than re-derive the dotnet/runtime#135201 workaround. Nothing else from Keys is used here. -->
+    <ProjectReference Include="..\NightlyDawn.Keys\NightlyDawn.Keys.csproj" />
   </ItemGroup>
 
 </Project>

@@ -28,8 +28,11 @@
        ScrollViewer is a separate, named sibling so ColumnsHost.MinWidth can bind to *its* Bounds.Width below —
        the actual live viewport, not a number only correct for one window size. -->
   <DockPanel>
+    <!-- IsEnabled follows WorkspaceViewModel.CanAddColumn (L9-2, plan §34): the view model owns the bound
+         (AppState.MaxColumns) and this is only its presentation, so a column count the store would refuse to
+         save cannot be produced from here. Disabled rather than pressable-and-inert, per L4c ④. -->
     <Button x:Name="AddColumnButton" DockPanel.Dock="Left" Margin="0,0,12,0" Content="+ Column"
-            VerticalAlignment="Top" Click="OnAddColumnClick" />
+            VerticalAlignment="Top" IsEnabled="{Binding CanAddColumn}" Click="OnAddColumnClick" />
 
     <ScrollViewer x:Name="ColumnsScrollViewer" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
       <!-- MinWidth bound to the ScrollViewer's own Bounds.Width, not a literal (Lead's §28 review, dimension

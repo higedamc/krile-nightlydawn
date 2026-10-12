@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -39,6 +40,7 @@ public sealed class WorkspaceViewModel : INotifyPropertyChanged, IDisposable
     {
         ArgumentNullException.ThrowIfNull(tabFactory);
         _tabFactory = tabFactory;
+        Columns.CollectionChanged += OnColumnsChanged;
 
         var column = NewColumn();
         Columns.Add(column);
@@ -48,12 +50,35 @@ public sealed class WorkspaceViewModel : INotifyPropertyChanged, IDisposable
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
+    /// <summary>Raised when anything <see cref="CaptureLayout"/> would record changed (L9): a column added or
+    /// removed, <see cref="SelectedColumn"/>, or any column's <see cref="ColumnViewModel.LayoutChanged"/> (tabs,
+    /// selected tab, a tab's query). Not raised for notes, status or loading state. Also raised during
+    /// <see cref="RestoreLayout"/> -- the consumer (<see cref="Persistence.LayoutPersistence"/>) only subscribes
+    /// after the restore is complete, which is how "restoring never saves" is kept true.</summary>
+    public event EventHandler? LayoutChanged;
+
     public ObservableCollection<ColumnViewModel> Columns { get; } = [];
+
+    /// <summary>Whether <see cref="AddColumn"/> may be called: false once <see cref="Columns"/> holds
+    /// <see cref="AppState.MaxColumns"/> (L9-2, plan §34). This property is the one owner of that bound on the
+    /// producing side -- <c>WorkspaceView</c>'s <c>AddColumnButton</c> binds <c>IsEnabled</c> to it and
+    /// <see cref="AddColumn"/> refuses when it is false, so there is no state a user can reach from which the
+    /// store's <c>SaveAsync</c> would refuse the layout. Before this property existed the store was the only gate,
+    /// and a 33rd column made every later save fail silently for the rest of the session: the user's work from
+    /// that point on was gone at the next launch (Lead's probe B). Raised through <see cref="PropertyChanged"/>
+    /// whenever <see cref="Columns"/> changes, so the bound button follows it.</summary>
+    public bool CanAddColumn => Columns.Count < AppState.MaxColumns;
 
     public ColumnViewModel? SelectedColumn
     {
         get => _selectedColumn;
-        set => SetField(ref _selectedColumn, value);
+        set
+        {
+            if (SetField(ref _selectedColumn, value))
+            {
+                LayoutChanged?.Invoke(this, EventArgs.Empty);
+            }
+        }
     }
 
     /// <summary>Where <see cref="ComposeViewModel"/> sends a successful post (plan §11.2): the selected
@@ -65,9 +90,17 @@ public sealed class WorkspaceViewModel : INotifyPropertyChanged, IDisposable
     public IPublishedNoteSink? ActiveSink => SelectedColumn?.SelectedTab ?? SelectedColumn?.Tabs.FirstOrDefault();
 
     /// <summary>Adds a new column (with one tab, same as the default) and selects it. Plan §11.5: no
-    /// name-edit UI, no persistence -- process lifetime only.</summary>
+    /// name-edit UI. Throws <see cref="InvalidOperationException"/> when <see cref="CanAddColumn"/> is false:
+    /// the button that calls this is disabled in that state, so reaching the throw means a caller skipped the
+    /// precondition, which is a programming error and not something to swallow (plan §34: a button that can be
+    /// pressed and does nothing is the shape L4c ④ rejected; a disabled one is honest).</summary>
     public ColumnViewModel AddColumn()
     {
+        if (!CanAddColumn)
+        {
+            throw new InvalidOperationException($"The workspace already holds {AppState.MaxColumns} columns, the most a saved layout can carry (AppState.MaxColumns); check CanAddColumn first.");
+        }
+
         var column = NewColumn();
         Columns.Add(column);
         SelectedColumn = column;
@@ -97,12 +130,111 @@ public sealed class WorkspaceViewModel : INotifyPropertyChanged, IDisposable
         RecalculateColumnWidths();
     }
 
+    /// <summary>Replaces the built-in layout with a saved one (L9, plan §32.2): one <see cref="ColumnViewModel"/>
+    /// per <see cref="Column"/> carrying that column's id, one tab per <see cref="Timeline"/> carrying its id and
+    /// <see cref="Timeline.KqlQuery"/>, the saved selections re-applied, and every tab with a non-blank query
+    /// subscribed -- a client that brought the columns back empty and waited for the user to press Subscribe in
+    /// each one would have restored the furniture but not the room. Must be called on the UI thread, before the
+    /// user has touched anything, with a state the store has already bounded (the store is the one gate;
+    /// this method trusts its caller the way <see cref="AddColumn"/> does).
+    ///
+    /// <para>A no-op for an empty <paramref name="columns"/>: that is <see cref="AppState.Default"/>'s meaning
+    /// ("no saved layout"), so the built-in layout the constructor made stays, unsaved
+    /// ([[persisted-default-erases-unset]]). Selection ids that name nothing fall back to the first column /
+    /// first tab rather than throwing: a stale id is a reason to pick something, not a reason not to start.</para>
+    /// </summary>
+    public void RestoreLayout(IReadOnlyList<Column> columns, string? activeColumnId)
+    {
+        ArgumentNullException.ThrowIfNull(columns);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (columns.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var existing in Columns.ToArray())
+        {
+            Columns.Remove(existing);
+            existing.Dispose();
+        }
+
+        foreach (var saved in columns)
+        {
+            var column = new ColumnViewModel(_tabFactory, saved.Id);
+            foreach (var savedTab in saved.Tabs)
+            {
+                var tab = column.AddTab();
+                tab.Id = savedTab.Id;
+                tab.Query = savedTab.KqlQuery;
+            }
+
+            column.SelectedTab = column.Tabs.FirstOrDefault(t => t.Id == saved.SelectedTabId) ?? column.Tabs.FirstOrDefault();
+            Columns.Add(column);
+        }
+
+        SelectedColumn = Columns.FirstOrDefault(c => c.Id == activeColumnId) ?? Columns[0];
+        RecalculateColumnWidths();
+
+        foreach (var tab in Columns.SelectMany(c => c.Tabs))
+        {
+            if (!string.IsNullOrWhiteSpace(tab.Query))
+            {
+                tab.Subscribe();
+            }
+        }
+    }
+
+    /// <summary>The current layout as the <see cref="AppState"/> a store writes (L9): columns left to right,
+    /// each tab as a <see cref="Timeline"/> whose <see cref="Timeline.Title"/> and <see cref="Timeline.KqlQuery"/>
+    /// are both the tab's live <see cref="TimelineViewModel.Query"/> (the same thing <see cref="TimelineViewModel.Subscribe"/>
+    /// puts in its own <see cref="Timeline"/>; there is no separate user-set title yet, plan §21.2), the
+    /// selections by id, and <paramref name="settings"/> as given -- this class knows nothing about the theme,
+    /// the caller supplies it. Nothing else: no notes, no status, no key material, nothing from
+    /// <see cref="IKeyStore"/>; the four fields of the record are the whole surface.</summary>
+    public AppState CaptureLayout(Settings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        var columns = Columns
+            .Select(c => new Column(
+                c.Id,
+                c.Tabs.Select(t => new Timeline(t.Id, Title: t.Query, KqlQuery: t.Query)).ToArray(),
+                c.SelectedTab?.Id))
+            .ToArray();
+        return new AppState(AppState.CurrentSchemaVersion, columns, SelectedColumn?.Id, settings);
+    }
+
     private ColumnViewModel NewColumn()
     {
         var column = new ColumnViewModel(_tabFactory);
         column.AddTab();
         return column;
     }
+
+    /// <summary>Mirror of <see cref="ColumnViewModel"/>'s tab watching, one level up: every column that enters
+    /// <see cref="Columns"/> feeds <see cref="LayoutChanged"/>, every column that leaves stops.</summary>
+    private void OnColumnsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.OldItems is not null)
+        {
+            foreach (var column in e.OldItems.OfType<ColumnViewModel>())
+            {
+                column.LayoutChanged -= OnColumnLayoutChanged;
+            }
+        }
+
+        if (e.NewItems is not null)
+        {
+            foreach (var column in e.NewItems.OfType<ColumnViewModel>())
+            {
+                column.LayoutChanged += OnColumnLayoutChanged;
+            }
+        }
+
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanAddColumn)));
+        LayoutChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void OnColumnLayoutChanged(object? sender, EventArgs e) => LayoutChanged?.Invoke(this, EventArgs.Empty);
 
     /// <summary>Pushes <see cref="SoleColumnMinWidth"/> or <see cref="SharedColumnMinWidth"/> onto every
     /// column's <see cref="ColumnViewModel.MinWidthHint"/>, called after every <see cref="Columns"/> mutation
@@ -171,14 +303,15 @@ public sealed class WorkspaceViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    private void SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
+    private bool SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
     {
         if (EqualityComparer<T>.Default.Equals(field, value))
         {
-            return;
+            return false;
         }
 
         field = value;
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        return true;
     }
 }

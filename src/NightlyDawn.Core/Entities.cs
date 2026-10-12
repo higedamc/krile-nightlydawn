@@ -148,7 +148,19 @@ public sealed record InitialLoadComplete : TimelineUpdate;
 /// <summary><see cref="KqlQuery"/> is persisted as raw text and compiled at load time, so storage isn't tied to the AST's shape as the grammar evolves (B8).</summary>
 public sealed record Timeline(string Id, string Title, string KqlQuery);
 
-public sealed record Tab(string Id, string Title, IReadOnlyList<Timeline> Columns);
+/// <summary>One workspace column: an ordered set of tabs (each a <see cref="Timeline"/>) plus which of them is
+/// selected. Columns are on the outside and tabs on the inside, matching the fork (StarryEyes
+/// <c>MainArea.xaml</c>) and the running UI since plan §21.2 (L4b: <c>WorkspaceViewModel.Columns</c> →
+/// <c>ColumnViewModel.Tabs</c>). This record replaced the 0d-era <c>Tab(Id, Title, Columns)</c> in L9 (plan §32.1),
+/// <em>before</em> anything was ever persisted, so the on-disk shape never carried the inverted hierarchy and no
+/// migration exists for it. A column has no title on purpose (the fork's columns are untitled; plan §21.2).</summary>
+/// <param name="Id">Opaque identity, unique within an <see cref="AppState"/>. Only ever compared against
+/// <see cref="SelectedTabId"/>/<see cref="AppState.ActiveColumnId"/> inside the same snapshot.</param>
+/// <param name="Tabs">Left to right. May be empty: closing a column's last tab is allowed at runtime
+/// (<c>ColumnViewModel.CloseTab</c>), so a saved column may legitimately have no tabs.</param>
+/// <param name="SelectedTabId">The <see cref="Timeline.Id"/> of the selected tab, or null when <paramref name="Tabs"/>
+/// is empty. Must name one of <paramref name="Tabs"/> when non-null.</param>
+public sealed record Column(string Id, IReadOnlyList<Timeline> Tabs, string? SelectedTabId);
 
 public enum AppTheme
 {
