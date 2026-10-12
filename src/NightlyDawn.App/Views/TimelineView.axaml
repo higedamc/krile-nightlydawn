@@ -1,0 +1,32 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:tl="using:NightlyDawn.App.Timelines"
+             xmlns:views="using:NightlyDawn.App.Views"
+             x:Class="NightlyDawn.App.Views.TimelineView"
+             x:DataType="tl:TimelineViewModel">
+  <!-- One tab's timeline content (one column before plan §21.2's inversion). Query text goes to the
+       ITimelineSourceFactory verbatim; KQL is compiled downstream (1c). QueryBox/SubscribeButton/× moved up
+       into TabStripView's row (plan §22.3 / L4b-2): that row had ~500 DIP of unused width next to one tab
+       header, so folding the query row into it removes ~40 DIP of vertical chrome from here instead of
+       trimming Padding; Padding is back to 12 (the 8 used between L4b and L4b-2 only fit macOS, not the
+       Linux CI runner; plan §22.2). -->
+  <Border Padding="12"
+          BorderThickness="1" BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+          CornerRadius="6">
+    <DockPanel>
+      <ProgressBar DockPanel.Dock="Top" IsIndeterminate="True"
+                   IsVisible="{Binding IsLoading}" />
+
+      <TextBlock DockPanel.Dock="Top" Margin="0,8,0,4" Opacity="0.7"
+                 Text="{Binding Status}" />
+
+      <ListBox x:Name="TimelineList" ItemsSource="{Binding Notes}" SelectionMode="Single">
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="tl:NoteRow">
+            <views:NoteRowView />
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </DockPanel>
+  </Border>
+</UserControl>

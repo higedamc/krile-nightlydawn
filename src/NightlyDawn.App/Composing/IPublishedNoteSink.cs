@@ -4,7 +4,7 @@ namespace NightlyDawn.App.Composing;
 
 /// <summary>
 /// Where a successful publish lands (plan §10.1-4): inserted into the active timeline column, with a
-/// relay-acceptance status. A narrow interface -- not a direct <see cref="Timelines.TimelineColumnViewModel"/>
+/// relay-acceptance status. A narrow interface -- not a direct <see cref="Timelines.TimelineViewModel"/>
 /// dependency -- so <see cref="ComposeViewModel"/> and <see cref="NoteRowActions"/> stay testable with a fake
 /// instead of a real column.
 ///

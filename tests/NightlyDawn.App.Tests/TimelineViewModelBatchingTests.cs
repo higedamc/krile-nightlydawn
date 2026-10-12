@@ -14,7 +14,7 @@ using Xunit;
 
 namespace NightlyDawn.App.Tests;
 
-public class TimelineColumnViewModelBatchingTests
+public class TimelineViewModelBatchingTests
 {
     private sealed class CountingProfileStore(TimeSpan latency) : IProfileStore
     {
@@ -48,7 +48,7 @@ public class TimelineColumnViewModelBatchingTests
         var latency = TimeSpan.FromMilliseconds(50);
         var store = new CountingProfileStore(latency);
         var source = new FakeTimelineSource();
-        using var vm = new TimelineColumnViewModel(
+        using var vm = new TimelineViewModel(
             new FakeTimelineSourceFactory().Enqueue(source),
             postToUi: action => action(),
             profileStore: store);

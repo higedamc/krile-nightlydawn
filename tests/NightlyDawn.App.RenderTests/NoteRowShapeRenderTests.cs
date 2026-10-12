@@ -180,10 +180,10 @@ public sealed class NoteRowShapeRenderTests
             HeadlessWindowExtensions.SetRenderScaling(Window, 1.0);
             Dispatcher.UIThread.RunJobs();
 
-            var column = ((WorkspaceViewModel)Window.DataContext!).Tabs[0].Columns[0];
-            column.Query = "from home"; // StaticTimelineSourceFactory ignores the text; the column still needs a query to subscribe.
-            column.Subscribe();
-            Pump(() => column.Notes.Count > 0, "the timeline never produced a row to measure");
+            var tab = ((WorkspaceViewModel)Window.DataContext!).Columns[0].Tabs[0];
+            tab.Query = "from home"; // StaticTimelineSourceFactory ignores the text; the tab still needs a query to subscribe.
+            tab.Subscribe();
+            Pump(() => tab.Notes.Count > 0, "the timeline never produced a row to measure");
             Dispatcher.UIThread.RunJobs();
 
             MoveAway(); // Start from a known pointer position: the window corner, not over any row.

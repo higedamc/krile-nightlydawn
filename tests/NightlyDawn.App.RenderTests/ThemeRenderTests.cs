@@ -214,7 +214,7 @@ public sealed class ThemeRenderTests
 
             // L4 replaced MainWindow's DataContext with the workspace shell, so the timeline now lives one
             // tab and one column down. Mirror MainWindowRenderTests rather than casting the shell itself.
-            var timeline = ((WorkspaceViewModel)Window.DataContext!).Tabs[0].Columns[0];
+            var timeline = ((WorkspaceViewModel)Window.DataContext!).Columns[0].Tabs[0];
             timeline.Query = "from home";
             timeline.Subscribe();
             Pump(() => !timeline.IsLoading, "the timeline stream never finished");

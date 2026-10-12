@@ -4,24 +4,43 @@
              xmlns:views="using:NightlyDawn.App.Views"
              x:Class="NightlyDawn.App.Views.WorkspaceView"
              x:DataType="tl:WorkspaceViewModel">
-  <!-- Columns of the selected tab (L4). The tab strip itself now lives in MainWindow's header row, beside
-       the title (plan §11.6 / PR #30 review): this control holds only the column row, so it costs no
-       vertical DIP beyond the columns themselves. Default = one tab, one column, so QueryBox/SubscribeButton/
-       TimelineList name resolution stays unique (plan §11.4). Process-lifetime only: no layout persistence,
-       no tab rename, no drag reorder (plan §11.5). -->
+  <!-- Columns are the outer layer, each with its own tab strip (plan §21.2 / L4b): the fork
+       (StarryEyes MainArea.xaml:196, ColumnTemplate:83/96/118) nests Tabs inside Columns, the opposite of
+       what this app shipped as L4 (TabStripView lived in MainWindow's header, one per workspace). Default =
+       one column, one tab, so QueryBox/SubscribeButton/TimelineList name resolution stays unique (plan §11.4,
+       still true after the inversion). Process-lifetime only: no layout persistence, no column rename, no
+       drag reorder (plan §11.5 / L9). -->
+  <UserControl.DataTemplates>
+    <!-- Avalonia's implicit-template slot (DataTemplates, not Resources): the ContentControl below picks
+         this up for any TimelineViewModel content by DataType match, same effect as ListBox.ItemTemplate's
+         explicit x:DataType elsewhere in this app. -->
+    <DataTemplate DataType="tl:TimelineViewModel">
+      <views:TimelineView MinWidth="420" />
+    </DataTemplate>
+  </UserControl.DataTemplates>
+
   <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
     <StackPanel Orientation="Horizontal" Spacing="12">
       <Button x:Name="AddColumnButton" Content="+ Column" VerticalAlignment="Top" Click="OnAddColumnClick" />
 
-      <ItemsControl x:Name="ColumnsHost" ItemsSource="{Binding SelectedTab.Columns}">
+      <ItemsControl x:Name="ColumnsHost" ItemsSource="{Binding Columns}">
         <ItemsControl.ItemsPanel>
           <ItemsPanelTemplate>
             <StackPanel Orientation="Horizontal" Spacing="12" />
           </ItemsPanelTemplate>
         </ItemsControl.ItemsPanel>
         <ItemsControl.ItemTemplate>
-          <DataTemplate x:DataType="tl:TimelineColumnViewModel">
-            <views:TimelineColumnView MinWidth="420" />
+          <DataTemplate x:DataType="tl:ColumnViewModel">
+            <!-- DockPanel, not a vertical StackPanel: a StackPanel sizes itself to the sum of its children's
+                 desired heights, so TimelineList inside the selected tab's TimelineView would collapse to its
+                 empty-list size instead of filling the column (the outer horizontal StackPanel above stretches
+                 each column item to the full cross-axis height, same as it did pre-L4b; this inner DockPanel
+                 is what has to pass that height on down to the tab strip's one remaining undocked child,
+                 same pattern MainWindow's own DockPanel already uses for Workspace itself). -->
+            <DockPanel MinWidth="420">
+              <views:TabStripView DockPanel.Dock="Top" />
+              <ContentControl Content="{Binding SelectedTab}" />
+            </DockPanel>
           </DataTemplate>
         </ItemsControl.ItemTemplate>
       </ItemsControl>

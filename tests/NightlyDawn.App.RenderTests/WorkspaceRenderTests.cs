@@ -29,15 +29,16 @@ public sealed class WorkspaceRenderTests
     public static readonly string OutputDirectory = Path.Combine(AppContext.BaseDirectory, "RenderFrames");
 
     /// <summary>
-    /// Plan §11.4's containment check, updated for the PR #30 review (§11.6): <c>TabStrip</c> moved out of
-    /// <c>WorkspaceView</c> into <c>MainWindow</c>'s own header row, beside the title, so it no longer costs
-    /// <c>Workspace</c> any vertical DIP. This asserts the opposite of the pre-review version on purpose --
-    /// <c>TabStrip</c> must now be disjoint from <c>Workspace</c>'s box and must sit beside the header title,
-    /// not above the columns. <c>Workspace</c> itself must still stay disjoint from the compose/keys/footer
-    /// chrome around it, same as before.
+    /// Plan §21.2 (L4b) replaces the PR #30 placement this test used to assert: <c>TabStrip</c> moved back
+    /// out of <c>MainWindow</c>'s header row and into each column, inside <c>WorkspaceView</c> -- the fork's
+    /// structure (StarryEyes <c>MainArea.xaml</c>) nests tabs inside columns, so the strip that switches
+    /// between a column's tabs belongs with that column, not with the window title. This asserts the
+    /// opposite of the pre-L4b version on purpose: <c>TabStrip</c> must now be <em>inside</em>
+    /// <c>Workspace</c>'s box, not disjoint from it and sitting beside the header. <c>Workspace</c> itself
+    /// must still stay disjoint from the compose/keys/footer/header chrome around it, same as before.
     /// </summary>
     [AvaloniaFact]
-    public void DefaultLayout_NewChrome_IsContainedInsideTheHeaderRegion()
+    public void DefaultLayout_PerColumnTabStrip_LivesInsideWorkspace_NotTheHeader()
     {
         using var session = new RenderSession(900, 600, 1.0);
         var window = session.Window;
@@ -48,16 +49,8 @@ public sealed class WorkspaceRenderTests
         var tabStrip = FindByName<Control>(window, "TabStrip")!;
         var tabStripBounds = BoundsInWindow(tabStrip, window);
 
-        var header = window.GetVisualDescendants().OfType<TextBlock>()
-            .FirstOrDefault(tb => tb.Text == "Krile NightlyDawn")
-            ?? throw new Xunit.Sdk.XunitException("header title text block not found");
-        var headerBounds = BoundsInWindow(header, window);
-
-        AssertDisjoint(workspaceBounds, tabStripBounds, "TabStrip");
-        Assert.True(Math.Abs(tabStripBounds.Y - headerBounds.Y) < 20.0,
-            $"TabStrip should sit beside the header title, not above the columns; TabStrip.Y={tabStripBounds.Y:0.#}, header.Y={headerBounds.Y:0.#}");
-        Assert.True(tabStripBounds.X >= headerBounds.Right - 0.5,
-            $"TabStrip should sit to the right of the header title; TabStrip.X={tabStripBounds.X:0.#}, header.Right={headerBounds.Right:0.#}");
+        Assert.True(workspaceBounds.Intersects(tabStripBounds),
+            $"TabStrip {tabStripBounds} should now live inside Workspace {workspaceBounds} (plan §21.2's inversion moved it out of the header)");
 
         // "PlatformInfo" is deliberately not in this list: it lives inside the collapsed-by-default "Platform
         // check" Expander, which does not realize its content into the visual tree while collapsed -- neither
@@ -68,7 +61,10 @@ public sealed class WorkspaceRenderTests
             AssertDisjoint(workspaceBounds, BoundsInWindow(sibling, window), name);
         }
 
-        AssertDisjoint(workspaceBounds, headerBounds, "header title");
+        var header = window.GetVisualDescendants().OfType<TextBlock>()
+            .FirstOrDefault(tb => tb.Text == "Krile NightlyDawn")
+            ?? throw new Xunit.Sdk.XunitException("header title text block not found");
+        AssertDisjoint(workspaceBounds, BoundsInWindow(header, window), "header title");
 
         var footer = window.GetVisualDescendants().OfType<TextBlock>()
             .FirstOrDefault(tb => tb.Text?.Contains("Krile NightlyDawn contributors", StringComparison.Ordinal) == true)
@@ -76,9 +72,11 @@ public sealed class WorkspaceRenderTests
         AssertDisjoint(workspaceBounds, BoundsInWindow(footer, window), "footer");
     }
 
-    /// <summary>Visual record only (plan §11.4: "2 タブ・3 列のフレームを 1 枚焼く") -- not asserted for pixel
-    /// equality against anything, just that Skia actually drew a non-blank frame with this many tabs/columns
-    /// open at once. Saved next to <see cref="MainWindowRenderTests"/>'s frames for a human to look at.</summary>
+    /// <summary>Visual record only (plan §11.4's original "2 タブ・3 列のフレームを 1 枚焼く", reshaped for
+    /// §21.2's inversion since which axis is "tabs" and which is "columns" has swapped) -- not asserted for
+    /// pixel equality against anything, just that Skia actually drew a non-blank frame with several
+    /// tabs/columns open at once. Saved next to <see cref="MainWindowRenderTests"/>'s frames for a human to
+    /// look at.</summary>
     [AvaloniaFact]
     public void MultiTabMultiColumn_RendersANonBlankFrame()
     {
@@ -86,18 +84,17 @@ public sealed class WorkspaceRenderTests
         var window = session.Window;
         var workspace = (WorkspaceViewModel)window.DataContext!;
 
-        // Home tab: the default column plus one more (2 columns). A second tab with its own column (1 more).
-        // 2 tabs, 3 columns total, matching the plan's "2タブ・3列" ask.
-        workspace.Tabs[0].AddColumn();
-        var secondTab = workspace.AddTab();
-        secondTab.SelectedColumn ??= secondTab.Columns.FirstOrDefault();
-        workspace.SelectedTab = workspace.Tabs[0];
+        // Column 1: the default tab plus one more (2 tabs). A second, independent column with its own tab
+        // (1 more). 2 columns, 3 tabs total -- the inverted-axis equivalent of the plan's "2タブ・3列" ask.
+        workspace.Columns[0].AddTab();
+        workspace.AddColumn();
+        workspace.SelectedColumn = workspace.Columns[0];
         Dispatcher.UIThread.RunJobs();
 
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
         Directory.CreateDirectory(OutputDirectory);
-        frame!.Save(Path.Combine(OutputDirectory, "workspace_2tabs_3columns.png"), new PngBitmapEncoderOptions());
+        frame!.Save(Path.Combine(OutputDirectory, "workspace_2columns_3tabs.png"), new PngBitmapEncoderOptions());
 
         AssertFrameIsNotUniform(frame);
     }
