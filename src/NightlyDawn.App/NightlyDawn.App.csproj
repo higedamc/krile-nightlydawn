@@ -38,6 +38,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="NightlyDawn.App.Tests" />
+    <InternalsVisibleTo Include="NightlyDawn.App.RenderTests" />
   </ItemGroup>
 
 </Project>

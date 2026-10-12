@@ -12,6 +12,15 @@ public static class AppDataPaths
     public const string DirectoryName = "NightlyDawn";
     public const string LocalKeyFileName = "local-key.ncryptsec";
 
+    /// <summary>Subdirectory of the data dir where <c>RemoteImageLoader</c> keeps fetched avatars (L6b). Inside
+    /// the 0700 data dir on purpose: which avatars were fetched is a record of whose notes were read. Deleting
+    /// the directory is the cache's only refresh mechanism in v1 (the loader never expires entries).</summary>
+    public const string AvatarCacheDirectoryName = "avatar-cache";
+
+    /// <summary>The avatar cache directory for <paramref name="dataDir"/>. Not created here: the loader creates
+    /// it on the first successful fetch, so a run that never shows an avatar leaves no empty directory.</summary>
+    public static string AvatarCacheDirectory(string dataDir) => Path.Combine(dataDir, AvatarCacheDirectoryName);
+
     public static string Resolve(string? overrideDir, string? xdgDataHome, string home, bool isMacOS)
     {
         if (!string.IsNullOrWhiteSpace(overrideDir))

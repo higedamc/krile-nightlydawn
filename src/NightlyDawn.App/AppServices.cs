@@ -27,6 +27,16 @@ public static class AppServices
     /// <summary>The publisher the host constructed (Core's <see cref="INotePublisher"/>; same null-tolerant pattern as <see cref="ProfileStore"/>). Null until a host wires a real implementation -- today that means <c>NightlyDawn.Nostr.Publishing.NotePublisher</c> (L3a), which this leaf does not depend on: both <see cref="App.Composing.ComposeViewModel"/> and <see cref="App.Composing.NoteRowActions"/> read this through a <c>Func&lt;INotePublisher?&gt;</c> so a host wiring it up later needs no new App-layer code.</summary>
     public static INotePublisher? NotePublisher { get; set; }
 
+    /// <summary>The image loader the host constructed (Core's <see cref="IRemoteImageLoader"/>; today
+    /// <c>NightlyDawn.Storage.RemoteImageLoader</c>, L6a). <b>Null means no avatar is fetched, for anyone</b>: the
+    /// row view checks this before asking <see cref="Avatars.AvatarImageCache"/> for anything, so switching
+    /// avatars off is this one assignment, not a search through the views. The default is to load avatars for
+    /// every author, not only followed ones (plan §26.4, decided by Lead and reported to ???) -- the beacon
+    /// that <c>RemoteImageLoader</c>'s remarks describe is accepted as the price of reproducing the fork's row.
+    /// Null for a designer preview, for any test that does not set it, and for a host without a data
+    /// directory (the disk cache has nowhere to live).</summary>
+    public static IRemoteImageLoader? RemoteImageLoader { get; set; }
+
     /// <summary>The theme variant the host chose, read once by <see cref="App.Initialize"/> (L1). Defaults to
     /// <see cref="AppTheme.System"/> = follow the OS, which is also what a designer preview and any host that does
     /// not set it get. The host reads <c>NIGHTLYDAWN_THEME</c>; see <see cref="Theming.ThemeController"/>.</summary>

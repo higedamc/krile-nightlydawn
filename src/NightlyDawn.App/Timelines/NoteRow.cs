@@ -22,8 +22,15 @@ namespace NightlyDawn.App.Timelines;
 /// the column's <c>Status</c>, not here. Null for a row built without a publisher wired (designer preview,
 /// sample factory, most unit tests) -- <see cref="CanReplyOrRepost"/> still reflects <see cref="Kind"/>
 /// regardless, so a bound button's <c>IsEnabled</c> does not depend on whether a publisher exists.</para>
+///
+/// <para><see cref="AvatarUrl"/> (L6b) is the profile's <c>picture</c> string exactly as the relay supplied it,
+/// decided at construction like <see cref="AuthorLabel"/> and with the same v1 limitation (a profile arriving
+/// later does not update an already-built row). The row does not validate it: the scheme, address, size and
+/// content checks all live behind <see cref="IRemoteImageLoader"/>, and a URL that fails them simply yields
+/// no image. The row never fetches anything itself -- the view asks <see cref="Avatars.AvatarImageCache"/>,
+/// which is the only path from this string to bytes.</para>
 /// </summary>
-public sealed record NoteRow(string Id, string AuthorPubkey, long CreatedAt, string DisplayContent, string TimeLabel, string AuthorLabel, NoteKind Kind, NoteRowActions? Actions = null)
+public sealed record NoteRow(string Id, string AuthorPubkey, long CreatedAt, string DisplayContent, string TimeLabel, string AuthorLabel, NoteKind Kind, NoteRowActions? Actions = null, string? AvatarUrl = null)
 {
     public const int MaxContentChars = 1_000;
     private const long MaxUnixSeconds = 253_402_300_799; // 9999-12-31T23:59:59Z, DateTimeOffset's ceiling.
@@ -66,7 +73,8 @@ public sealed record NoteRow(string Id, string AuthorPubkey, long CreatedAt, str
             FormatTime(note.CreatedAt, now ?? DateTimeOffset.Now),
             CoreAuthorLabel.For(profile, note.AuthorPubkey),
             note.Kind,
-            actions);
+            actions,
+            string.IsNullOrWhiteSpace(profile?.Picture) ? null : profile.Picture);
     }
 
     /// <summary>Always the full local date and time, including seconds -- unlike <see cref="FormatTime"/>,
