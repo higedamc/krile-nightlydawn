@@ -1,4 +1,5 @@
 using NightlyDawn.Core;
+using NightlyDawn.Filters;
 using NightlyDawn.Keys;
 using NightlyDawn.Nostr.Timelines;
 using Xunit;
@@ -15,7 +16,7 @@ namespace NightlyDawn.Host.Tests;
 public sealed class PublisherWiringTests
 {
     private static NostrTimelineSourceFactory NewFactory() =>
-        new([RelayUrl.Parse("wss://relay.example/")]);
+        new([RelayUrl.Parse("wss://relay.example/")], new FilterCompiler());
 
     private static IKeyStore NewKeyStore() =>
         new LocalKeyStore(new FileKeyFileStore(Path.Combine(Path.GetTempPath(), $"krile-l3c-{Guid.NewGuid():N}.json")));

@@ -1,7 +1,6 @@
 using Avalonia;
 using NightlyDawn.App;
 using NightlyDawn.Keys;
-using NightlyDawn.Nostr.Timelines;
 
 namespace NightlyDawn.Host;
 
@@ -48,7 +47,7 @@ internal static class Program
             return 2;
         }
 
-        var timelineSourceFactory = new NostrTimelineSourceFactory(relays);
+        var timelineSourceFactory = TimelineSourceFactoryWiring.Create(relays);
         AppServices.TimelineSourceFactory = timelineSourceFactory;
         AppServices.ProfileStore = timelineSourceFactory.ProfileStore; // Shares the same backend/relay pool (plan §8).
         AppServices.ScreenshotPath = Environment.GetEnvironmentVariable(ScreenshotEnvVar);

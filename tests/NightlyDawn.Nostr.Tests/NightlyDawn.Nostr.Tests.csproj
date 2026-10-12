@@ -15,6 +15,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\NightlyDawn.Nostr\NightlyDawn.Nostr.csproj" />
+    <!-- Real KQL parsing/compilation for NewFactory's default compiler (L5i), so these tests exercise the
+         production ITimelineQueryCompiler adapter rather than a hand-rolled stand-in. -->
+    <ProjectReference Include="..\..\src\NightlyDawn.Filters\NightlyDawn.Filters.csproj" />
   </ItemGroup>
 
 </Project>

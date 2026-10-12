@@ -98,7 +98,18 @@ public interface IFilterCompiler
     /// <exception cref="FilterParseException">The input is not valid KQL.</exception>
     FilterAst Parse(string kql);
 
-    CompiledFilter Compile(FilterAst ast);
+    /// <param name="ast">The parsed query.</param>
+    /// <param name="accountPubkey">The signed-in account's own pubkey, if any. Needed to compile <c>from mentions</c>
+    /// (the account being mentioned) and, together with <paramref name="resolvedFollows"/>, <c>from home</c>.</param>
+    /// <param name="resolvedFollows">The account's follow list (NIP-02, kind:3), already resolved by the caller —
+    /// this interface does no I/O itself. Required to compile <c>from home</c>; an empty (non-null) list is a
+    /// valid, meaningful answer ("follows nobody yet") and compiles to a timeline that matches nothing, not one
+    /// that matches everything.</param>
+    /// <exception cref="UnsupportedFilterFieldException">The AST's source or a field in its <c>where</c> clause
+    /// is not compilable yet — including <c>from home</c>/<c>from mentions</c> when the corresponding parameter
+    /// above was not supplied, and <c>from list</c> unconditionally (plan §1 item B, §7.3).</exception>
+    /// <exception cref="FilterParseException">A source argument or comparison value is malformed.</exception>
+    CompiledFilter Compile(FilterAst ast, string? accountPubkey = null, IReadOnlyList<string>? resolvedFollows = null);
 }
 
 /// <summary>Maps wire-level <see cref="NostrEvent"/>s onto domain types. Implemented in phase 1a alongside the Nostr.Sdk adapter.</summary>

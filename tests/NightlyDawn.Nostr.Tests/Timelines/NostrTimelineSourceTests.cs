@@ -1,5 +1,6 @@
 using System.Text.Json;
 using NightlyDawn.Core;
+using NightlyDawn.Filters;
 using NightlyDawn.Nostr.Relay;
 using NightlyDawn.Nostr.Tests.Fakes;
 using NightlyDawn.Nostr.Timelines;
@@ -11,7 +12,12 @@ public class NostrTimelineSourceTests
 {
     private static readonly TestSigner Signer = new();
     private static readonly TimeSpan TestTimeout = TimeSpan.FromSeconds(10);
-    private static readonly Timeline Kind1 = new("col", "kind:1", "kind:1");
+    private static readonly Timeline Kind1 = new("col", "kind:1", "from kind(\"1\") where ()");
+
+    // The real adapter over the real KQL compiler, not a hand-rolled stand-in — these tests are about streaming
+    // mechanics (EOSE, pagination, cancellation), so they use the production compile path end to end and only
+    // override it (via NewFactory's compiler parameter) when a test cares about the compiled predicate itself.
+    private static ITimelineQueryCompiler DefaultCompiler() => new NostrFilterQueryCompiler(new FilterCompiler(), new FakeContactListSource());
 
     private static (NostrTimelineSourceFactory Factory, Dictionary<string, FakeRelay> Relays, NostrBackend Backend) NewFactory(
         IEnumerable<string> relayUrls, TimeSpan? initialLoadTimeout = null, ITimelineQueryCompiler? compiler = null, NostrBackendOptions? options = null)
@@ -19,7 +25,7 @@ public class NostrTimelineSourceTests
         var connections = new FakeRelayFactory();
         var relays = relayUrls.ToDictionary(u => u, connections.Add, StringComparer.Ordinal);
         var backend = new NostrBackend(connections, options ?? new NostrBackendOptions { FetchTimeout = TimeSpan.FromSeconds(5) });
-        var factory = new NostrTimelineSourceFactory(backend, relays.Values.Select(r => r.Url).ToList(), compiler, initialLoadTimeout, ownsBackend: true, logger: null);
+        var factory = new NostrTimelineSourceFactory(backend, relays.Values.Select(r => r.Url).ToList(), compiler ?? DefaultCompiler(), initialLoadTimeout, ownsBackend: true, logger: null);
         return (factory, relays, backend);
     }
 
@@ -285,7 +291,7 @@ public class NostrTimelineSourceTests
     {
         var (factory, _, _) = NewFactory(["wss://r.example"]);
 
-        Assert.Throws<FilterParseException>(() => factory.CreateAnonymous(new Timeline("c", "bad", "from home")));
+        Assert.Throws<FilterParseException>(() => factory.CreateAnonymous(new Timeline("c", "bad", "not a kql query")));
 
         var account = new Account("00", new SignerDescriptor("00", SignerKind.Nip46));
         Assert.IsType<NostrTimelineSource>(factory.Create(Kind1, account));
@@ -293,12 +299,21 @@ public class NostrTimelineSourceTests
     }
 
     [Fact]
+    public void Factory_CreateAnonymous_RequiresAccountForHomeAndMentions()
+    {
+        var (factory, _, _) = NewFactory(["wss://r.example"]);
+
+        Assert.Throws<AccountRequiredException>(() => factory.CreateAnonymous(new Timeline("c", "home", "from home where ()")));
+        Assert.Throws<AccountRequiredException>(() => factory.CreateAnonymous(new Timeline("c", "mentions", "from mentions where ()")));
+    }
+
+    [Fact]
     public void Factory_RequiresAtLeastOneRelay()
     {
         var backend = new NostrBackend(new FakeRelayFactory());
 
-        Assert.Throws<ArgumentException>(() => new NostrTimelineSourceFactory(backend, [], compiler: null, initialLoadTimeout: null, ownsBackend: true, logger: null));
-        Assert.Throws<ArgumentException>(() => new NostrTimelineSourceFactory([]));
+        Assert.Throws<ArgumentException>(() => new NostrTimelineSourceFactory(backend, [], DefaultCompiler(), initialLoadTimeout: null, ownsBackend: true, logger: null));
+        Assert.Throws<ArgumentException>(() => new NostrTimelineSourceFactory([], new FilterCompiler()));
     }
 
     private static async Task<List<TimelineUpdate>> CollectUntilLoadedAsync(ITimelineSource source)
@@ -335,10 +350,10 @@ public class NostrTimelineSourceTests
     {
         public string? LastQuery { get; private set; }
 
-        public CompiledFilter Compile(string query)
+        public Func<CancellationToken, Task<CompiledFilter>> Compile(string query, string? accountPubkey)
         {
             LastQuery = query;
-            return result;
+            return _ => Task.FromResult(result);
         }
     }
 }

@@ -53,17 +53,24 @@ Each column holds its own query. Type one, press Subscribe (or Enter),
 and public notes from the configured relays stream in; the loading bar clears
 once every connected relay has delivered its stored events.
 
-Query syntax (minimal, until the KQL compiler lands in leaf 1c):
+Query syntax is KQL: `from <source> where <expression>`. Both clauses are
+mandatory — write `where ()` to match everything the source already selects.
 
-| Token | Meaning | Example |
+| Source | Meaning | Example |
 |---|---|---|
-| `kind:N` / `kinds:1,6` | event kinds (default `1`) | `kind:1` |
-| `author:<hex or npub1…>` / `authors:a,b` | author pubkeys as 64-char hex or NIP-19 npub | `author:npub180cvv0…` |
-| `#tag` / `t:tag` / `tags:a,b` | `#t` hashtag filter, case-insensitive | `#nostr` |
-| `limit:N` | relay-side limit (default 50, max 500) | `limit:100` |
+| `home` | notes from your followed authors (kind:3). Needs a signed-in key | `from home where ()` |
+| `mentions` | notes mentioning you. Needs a signed-in key | `from mentions where ()` |
+| `user("npub1…")` | one author's notes | `from user("npub180cvv0…") where ()` |
+| `kind("1")` | notes of one event kind | `from kind("1") where ()` |
+| `search("text")` | local substring match on note content | `from search("nostr") where ()` |
+| `relay("wss://…")` | notes first seen on one relay | `from relay("wss://relay.damus.io") where ()` |
 
-An empty query means `kind:1 limit:50`. `from …` (KQL) is rejected with a hint
-until 1c. Tokens are space-separated, e.g. `kinds:1,6 #bitcoin limit:100`.
+`where` filters with comparisons on `kind`, `text`, `created_at`, `user.npub`,
+`tags.t`, `reply` and `root`, combined with `&` (and), `|` (or) and `!`
+(not), e.g. `from home where kind = 1 & reply = true` or
+`from home where (kind = 1 | kind = 6) & !reply = true`.
+
+`from list(...)` (NIP-51 lists) is recognized but not yet supported.
 
 Relays: by default `wss://relay.damus.io` and `wss://nos.lol`. Override with a
 comma-separated `wss://` list; plaintext `ws://` is refused before any socket opens:
