@@ -61,10 +61,9 @@ public sealed class WorkspaceRenderTests
             AssertDisjoint(workspaceBounds, BoundsInWindow(sibling, window), name);
         }
 
-        var header = window.GetVisualDescendants().OfType<TextBlock>()
-            .FirstOrDefault(tb => tb.Text == "Krile NightlyDawn")
-            ?? throw new Xunit.Sdk.XunitException("header title text block not found");
-        AssertDisjoint(workspaceBounds, BoundsInWindow(header, window), "header title");
+        // The header title TextBlock this used to check here is gone (plan §26.5 / L4c ②): the compose box
+        // is the window's top row now, with no heading above it. ComposeBox's own disjointness from Workspace
+        // is already covered by the loop above.
 
         var footer = window.GetVisualDescendants().OfType<TextBlock>()
             .FirstOrDefault(tb => tb.Text?.Contains("Krile NightlyDawn contributors", StringComparison.Ordinal) == true)

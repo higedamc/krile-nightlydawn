@@ -14,36 +14,64 @@
     <!-- Avalonia's implicit-template slot (DataTemplates, not Resources): the ContentControl below picks
          this up for any TimelineViewModel content by DataType match, same effect as ListBox.ItemTemplate's
          explicit x:DataType elsewhere in this app. -->
+    <!-- 300, not 420: this is just a "never render absurdly thin" floor for TimelineView itself. The real
+         sizing driver is the per-column DockPanel's MinWidth below (bound to MinWidthHint, plan §26.5 / L4c
+         ④); a literal 420 here would force every column at least that wide regardless of MinWidthHint,
+         since DockPanel's own measure is the max of its MinWidth and what its children need. -->
     <DataTemplate DataType="tl:TimelineViewModel">
-      <views:TimelineView MinWidth="420" />
+      <views:TimelineView MinWidth="300" />
     </DataTemplate>
   </UserControl.DataTemplates>
 
-  <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-    <StackPanel Orientation="Horizontal" Spacing="12">
-      <Button x:Name="AddColumnButton" Content="+ Column" VerticalAlignment="Top" Click="OnAddColumnClick" />
+  <!-- AddColumnButton sits outside the ScrollViewer (Lead's §28 review, dimension ②'s fix incidentally also
+       answers nit 2: the button no longer scrolls out of view with the columns). ColumnsHost's own
+       ScrollViewer is a separate, named sibling so ColumnsHost.MinWidth can bind to *its* Bounds.Width below —
+       the actual live viewport, not a number only correct for one window size. -->
+  <DockPanel>
+    <Button x:Name="AddColumnButton" DockPanel.Dock="Left" Margin="0,0,12,0" Content="+ Column"
+            VerticalAlignment="Top" Click="OnAddColumnClick" />
 
-      <ItemsControl x:Name="ColumnsHost" ItemsSource="{Binding Columns}">
+    <ScrollViewer x:Name="ColumnsScrollViewer" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+      <!-- MinWidth bound to the ScrollViewer's own Bounds.Width, not a literal (Lead's §28 review, dimension
+           ②): a ScrollViewer measures its content with infinite width along the scrolling axis so the content
+           can report its own "natural" extent — a StackPanel-backed ItemsControl never fills that infinite
+           space, which is why master's single column sat at 640 DIP instead of using the window's full width.
+           Feeding the real viewport width back in as MinWidth gives UniformGrid something finite to stretch
+           into: when the columns' combined floor is under the viewport, UniformGrid divides the full MinWidth
+           evenly (every column grows past MinWidthHint to fill the window); when it's over, UniformGrid's
+           DesiredSize grows past MinWidth to whatever the columns actually need, so Extent > Viewport and this
+           ScrollViewer scrolls — same fallback as before, just reachable now instead of always-on. -->
+      <ItemsControl x:Name="ColumnsHost" ItemsSource="{Binding Columns}"
+                    MinWidth="{Binding #ColumnsScrollViewer.Bounds.Width}">
         <ItemsControl.ItemsPanel>
           <ItemsPanelTemplate>
-            <StackPanel Orientation="Horizontal" Spacing="12" />
+            <!-- Rows="1", Columns left auto: forces a single row of N equal-width cells regardless of how many
+                 columns exist, instead of UniformGrid's default square-ish N x N auto layout. -->
+            <UniformGrid Rows="1" />
           </ItemsPanelTemplate>
         </ItemsControl.ItemsPanel>
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="tl:ColumnViewModel">
             <!-- DockPanel, not a vertical StackPanel: a StackPanel sizes itself to the sum of its children's
                  desired heights, so TimelineList inside the selected tab's TimelineView would collapse to its
-                 empty-list size instead of filling the column (the outer horizontal StackPanel above stretches
-                 each column item to the full cross-axis height, same as it did pre-L4b; this inner DockPanel
-                 is what has to pass that height on down to the tab strip's one remaining undocked child,
-                 same pattern MainWindow's own DockPanel already uses for Workspace itself). -->
-            <DockPanel MinWidth="420">
+                 empty-list size instead of filling the column (UniformGrid above stretches each cell to the
+                 full cross-axis height, same as the old horizontal StackPanel did pre-L4b; this inner
+                 DockPanel is what has to pass that height on down to the tab strip's one remaining undocked
+                 child, same pattern MainWindow's own DockPanel already uses for Workspace itself).
+
+                 MinWidth is still bound to MinWidthHint, not dropped now that UniformGrid stretches on its
+                 own (plan §26.5 / L4c ④): UniformGrid's own MinWidth above only kicks in once *something*
+                 reports a floor per cell — without this, an empty-ish column (e.g. right after CloseTab
+                 leaves zero tabs) would report near-zero desired width and UniformGrid would just split the
+                 viewport evenly among whatever cells exist, no 600 DIP floor protected. MinWidthHint is
+                 WorkspaceViewModel's (the only place that knows how many sibling columns exist). -->
+            <DockPanel x:Name="ColumnRoot" MinWidth="{Binding MinWidthHint}">
               <views:TabStripView DockPanel.Dock="Top" />
               <ContentControl Content="{Binding SelectedTab}" />
             </DockPanel>
           </DataTemplate>
         </ItemsControl.ItemTemplate>
       </ItemsControl>
-    </StackPanel>
-  </ScrollViewer>
+    </ScrollViewer>
+  </DockPanel>
 </UserControl>

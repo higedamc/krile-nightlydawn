@@ -25,6 +25,16 @@ public sealed class WorkspaceViewModel : INotifyPropertyChanged, IDisposable
     private ColumnViewModel? _selectedColumn;
     private bool _disposed;
 
+    /// <summary>Plan §26.5 / L4c ④: the single default column must clear <c>TimelineList</c>'s pre-existing
+    /// 600 DIP floor (<c>MainWindowRenderTests</c>) now that the column head no longer has a <c>QueryBox</c>
+    /// forcing it wider on its own. 640 clears 600 after the column's Border padding (24 DIP) is subtracted.</summary>
+    private const double SoleColumnMinWidth = 640;
+
+    /// <summary>Two or more columns instead share the window (plan §26.5's "3 列が 1280 幅に収まる"): 360 is the
+    /// floor this leaf inherited from before ④, chosen then only as "wide enough for a tab strip + timeline",
+    /// not against any window-width budget -- <c>WindowChromeRenderTests</c> measures the real total.</summary>
+    private const double SharedColumnMinWidth = 360;
+
     public WorkspaceViewModel(Func<TimelineViewModel> tabFactory)
     {
         ArgumentNullException.ThrowIfNull(tabFactory);
@@ -33,6 +43,7 @@ public sealed class WorkspaceViewModel : INotifyPropertyChanged, IDisposable
         var column = NewColumn();
         Columns.Add(column);
         SelectedColumn = column;
+        RecalculateColumnWidths();
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -60,6 +71,7 @@ public sealed class WorkspaceViewModel : INotifyPropertyChanged, IDisposable
         var column = NewColumn();
         Columns.Add(column);
         SelectedColumn = column;
+        RecalculateColumnWidths();
         return column;
     }
 
@@ -81,6 +93,8 @@ public sealed class WorkspaceViewModel : INotifyPropertyChanged, IDisposable
         {
             SelectedColumn = Columns[^1];
         }
+
+        RecalculateColumnWidths();
     }
 
     private ColumnViewModel NewColumn()
@@ -88,6 +102,20 @@ public sealed class WorkspaceViewModel : INotifyPropertyChanged, IDisposable
         var column = new ColumnViewModel(_tabFactory);
         column.AddTab();
         return column;
+    }
+
+    /// <summary>Pushes <see cref="SoleColumnMinWidth"/> or <see cref="SharedColumnMinWidth"/> onto every
+    /// column's <see cref="ColumnViewModel.MinWidthHint"/>, called after every <see cref="Columns"/> mutation
+    /// (plan §26.5 / L4c ④). Re-stamps every column rather than only the one that changed: closing a column
+    /// down to one left must widen that survivor back out, which touching only the added/removed column
+    /// would miss.</summary>
+    private void RecalculateColumnWidths()
+    {
+        var width = Columns.Count <= 1 ? SoleColumnMinWidth : SharedColumnMinWidth;
+        foreach (var column in Columns)
+        {
+            column.MinWidthHint = width;
+        }
     }
 
     /// <summary>Retries exactly the tabs, across every column, whose last <see cref="TimelineViewModel.Subscribe"/>
