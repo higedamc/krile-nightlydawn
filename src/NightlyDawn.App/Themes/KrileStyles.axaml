@@ -19,6 +19,16 @@
     <Setter Property="Background" Value="{DynamicResource KrilePanelBackgroundBrush}" />
   </Style>
 
+  <!-- Fluent's ListBoxItem reserves 12,9 of padding per row, which at the fork's row density (an avatar's
+       48px next to two short lines) is most of a line of text per note. Selector-based for the same reason as
+       the brush above: the view that owns the list is being rewritten in parallel (L4b, plan §21.2), so this
+       leaf does not edit it. There is one list in the app today — the timeline — and this is deliberately
+       not scoped to its x:Name, which that rewrite is free to change. -->
+  <Style Selector="ListBoxItem">
+    <Setter Property="Padding" Value="8,3" />
+    <Setter Property="MinHeight" Value="0" />
+  </Style>
+
   <!-- Selection is the one place the accent has to be unmistakable; Fluent's default selection is a grey wash. -->
   <Style Selector="ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource KrileSelectionBrush}" />

@@ -28,6 +28,13 @@ public sealed record NoteRow(string Id, string AuthorPubkey, long CreatedAt, str
     public const int MaxContentChars = 1_000;
     private const long MaxUnixSeconds = 253_402_300_799; // 9999-12-31T23:59:59Z, DateTimeOffset's ceiling.
 
+    /// <summary>The full local timestamp, shown in place of <see cref="TimeLabel"/> while the pointer is over
+    /// the row (plan §21.3; the fork swaps ShortTime/LongTime the same way, Timeline.xaml:1250/:1264).
+    /// <see cref="TimeLabel"/> is deliberately lossy -- "HH:mm" for today -- so the row stays narrow; this is
+    /// where the date and the seconds live. Computed rather than a constructor parameter so adding it does not
+    /// change <see cref="NoteRow"/>'s shape for its callers.</summary>
+    public string AbsoluteTimeLabel => FormatAbsoluteTime(CreatedAt);
+
     /// <summary>Reply/Repost are disabled for anything that is not a plain kind:1 (plan §10.1-6) -- the
     /// publisher throws <see cref="ArgumentException"/> for the same reason (<c>NoteEventBuilder.Reply</c>/
     /// <c>Repost</c>); this is the UI half of that double guard, kept here (not on <see cref="Actions"/>) so
@@ -60,6 +67,18 @@ public sealed record NoteRow(string Id, string AuthorPubkey, long CreatedAt, str
             CoreAuthorLabel.For(profile, note.AuthorPubkey),
             note.Kind,
             actions);
+    }
+
+    /// <summary>Always the full local date and time, including seconds -- unlike <see cref="FormatTime"/>,
+    /// which drops the date for today's notes. Out-of-range created_at renders as "?" for the same reason.</summary>
+    internal static string FormatAbsoluteTime(long createdAt)
+    {
+        if (createdAt < 0 || createdAt > MaxUnixSeconds)
+        {
+            return "?";
+        }
+
+        return DateTimeOffset.FromUnixTimeSeconds(createdAt).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
     }
 
     /// <summary>Local time for today's notes, date + time otherwise. A created_at outside DateTimeOffset's range (relays can send anything) renders as "?" instead of throwing.</summary>
