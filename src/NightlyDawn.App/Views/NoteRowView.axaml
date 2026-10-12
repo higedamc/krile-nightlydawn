@@ -1,21 +1,95 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:tl="using:NightlyDawn.App.Timelines"
+             xmlns:views="using:NightlyDawn.App.Views"
              x:Class="NightlyDawn.App.Views.NoteRowView"
              x:DataType="tl:NoteRow">
-  <StackPanel Spacing="2" Margin="0,4">
-    <StackPanel Orientation="Horizontal" Spacing="8">
-      <TextBlock Text="{Binding AuthorLabel}" FontWeight="SemiBold" />
-      <TextBlock Text="{Binding TimeLabel}" Opacity="0.6" />
-    </StackPanel>
-    <TextBlock Text="{Binding DisplayContent}" TextWrapping="Wrap" />
-    <StackPanel Orientation="Horizontal" Spacing="8">
-      <Button x:Name="ReplyButton" Content="Reply" FontSize="12"
-              IsEnabled="{Binding CanReplyOrRepost}" Click="OnReplyClick" />
-      <Button x:Name="RepostButton" Content="Repost" FontSize="12"
-              IsEnabled="{Binding CanReplyOrRepost}" Click="OnRepostClick" />
-      <Button x:Name="QuoteButton" Content="Quote" FontSize="12" Click="OnQuoteClick" />
-      <Button x:Name="ReactButton" Content="♥" FontSize="12" Click="OnReactClick" />
-    </StackPanel>
-  </StackPanel>
+  <!--
+    The row's shape, matched against the fork's own StarryEyes/Views/WindowParts/Primitives/Timeline.xaml
+    (plan §21.1): an avatar gutter on the left, the timestamp pinned to the right edge, and the per-note
+    command buttons hidden until the pointer is over the row (`CommandButtonRootPanel` there, :pointerover
+    here — WPF storyboards have no Avalonia equivalent worth importing for a show/hide).
+
+    Two deliberate differences from that file, both because the piece they need has not landed yet:
+      - the avatar gutter is empty. The image loader is PR #34 and the wiring that fills this slot is L6b;
+        reserving the width here (rather than with the image) keeps the next leaf from moving every row.
+        Nothing is drawn in the meantime: a placeholder box would claim "loading" for a request never made.
+      - selection does not reveal the commands, only hover. The fork keys off IsSelected as well, which lives
+        on the ListBoxItem *above* this control — a UserControl's styles cannot select its own ancestor, and
+        the view that owns the list is being rewritten in parallel (L4b, plan §21.2).
+  -->
+  <UserControl.Styles>
+    <!-- Both halves of every hover swap are styles, and none of these elements carries IsVisible in its own
+         attributes. That is load-bearing, not tidiness: in Avalonia a locally set property value outranks any
+         style setter, so an element written as IsVisible="False" in the markup below could never be revealed
+         by the :pointerover rule — it would silently stay hidden forever. The resting state has to be a
+         style for the hover state to be able to win. -->
+    <Style Selector="views|NoteRowView Border#CommandBar">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="views|NoteRowView TextBlock#LongTime">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+
+    <!-- Hidden, not merely transparent: IsVisible=false also takes the buttons out of hit testing, so a
+         pointer-down on the row body cannot land on an invisible Reply. The render test asserts exactly that
+         (IsEffectivelyVisible plus a hit test at the button's own centre, before and after a MouseMove). -->
+    <Style Selector="views|NoteRowView:pointerover Border#CommandBar">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+    <Style Selector="views|NoteRowView:pointerover TextBlock#ShortTime">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="views|NoteRowView:pointerover TextBlock#LongTime">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+    <Style Selector="views|NoteRowView Button.row-command">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Padding" Value="6,2" />
+      <Setter Property="MinHeight" Value="0" />
+    </Style>
+  </UserControl.Styles>
+
+  <!-- Background="Transparent" on the row root, not on the pieces inside it: without it the empty parts of
+       the row (the avatar gutter until L6b fills it, the space past a short line of text) are not hit-tested,
+       the pointer falls through to the ListBoxItem above, and :pointerover never fires there. The commands
+       would then appear only while the pointer is literally over a glyph. The gutter-hover assertion in
+       NoteRowShapeRenderTests is what holds this line in place. -->
+  <Grid ColumnDefinitions="Auto,*" Margin="0,2" Background="Transparent">
+    <!-- Width and height match the fork's DecodePixelWidth="48" status avatar (Timeline.xaml:413). -->
+    <Border x:Name="AvatarSlot" Grid.Column="0" Width="48" Height="48"
+            Margin="0,0,8,0" VerticalAlignment="Top" CornerRadius="4" />
+
+    <Panel Grid.Column="1">
+      <StackPanel Spacing="1">
+        <DockPanel LastChildFill="True">
+          <!-- The timestamp is docked first so it keeps its width and the author label is the part that
+               ellipsizes; docking it last would let a long name push the time out of the row. -->
+          <Panel DockPanel.Dock="Right" VerticalAlignment="Top" Margin="8,0,0,0">
+            <TextBlock x:Name="ShortTime" Text="{Binding TimeLabel}" Opacity="0.6" />
+            <TextBlock x:Name="LongTime" Text="{Binding AbsoluteTimeLabel}" Opacity="0.6" />
+          </Panel>
+          <TextBlock x:Name="AuthorLabelText" Text="{Binding AuthorLabel}" FontWeight="SemiBold"
+                     TextTrimming="CharacterEllipsis" />
+        </DockPanel>
+        <TextBlock Text="{Binding DisplayContent}" TextWrapping="Wrap" />
+      </StackPanel>
+
+      <!-- Overlaid rather than stacked under the body: revealing it must not change the row's height, or
+           every row below would jump as the pointer travels down the column. -->
+      <Border x:Name="CommandBar"
+              HorizontalAlignment="Right" VerticalAlignment="Bottom"
+              CornerRadius="4" Padding="2"
+              Background="{DynamicResource KrilePanelBackgroundBrush}">
+        <StackPanel Orientation="Horizontal" Spacing="4">
+          <Button x:Name="ReplyButton" Classes="row-command" Content="Reply"
+                  IsEnabled="{Binding CanReplyOrRepost}" Click="OnReplyClick" />
+          <Button x:Name="RepostButton" Classes="row-command" Content="Repost"
+                  IsEnabled="{Binding CanReplyOrRepost}" Click="OnRepostClick" />
+          <Button x:Name="QuoteButton" Classes="row-command" Content="Quote" Click="OnQuoteClick" />
+          <Button x:Name="ReactButton" Classes="row-command" Content="♥" Click="OnReactClick" />
+        </StackPanel>
+      </Border>
+    </Panel>
+  </Grid>
 </UserControl>

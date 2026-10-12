@@ -68,4 +68,37 @@ public class NoteRowTests
         Assert.Equal("09:30", NoteRow.FormatTime(sameDay.ToUnixTimeSeconds(), now));
         Assert.Matches(@"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$", NoteRow.FormatTime(now.AddDays(-3).ToUnixTimeSeconds(), now));
     }
+
+    [Theory]
+    [InlineData(long.MaxValue)]
+    [InlineData(long.MinValue)]
+    [InlineData(-1)]
+    [InlineData(253_402_300_800)]
+    public void FormatAbsoluteTime_DoesNotThrowOnOutOfRangeTimestamps(long createdAt)
+    {
+        Assert.Equal("?", NoteRow.FormatAbsoluteTime(createdAt));
+    }
+
+    /// <summary>The hover label (plan §21.3) is the one place the date and the seconds are shown, so it keeps
+    /// them for today's notes too -- which is exactly where <see cref="NoteRow.FormatTime"/> drops them.</summary>
+    [Fact]
+    public void FormatAbsoluteTime_KeepsTheDateAndSeconds_EvenForToday()
+    {
+        var todayLocal = DateTimeOffset.Now;
+        var sameDay = new DateTimeOffset(todayLocal.Year, todayLocal.Month, todayLocal.Day, 9, 30, 7, todayLocal.Offset);
+
+        Assert.Equal(sameDay.ToString("yyyy-MM-dd HH:mm:ss"), NoteRow.FormatAbsoluteTime(sameDay.ToUnixTimeSeconds()));
+        Assert.Equal("09:30", NoteRow.FormatTime(sameDay.ToUnixTimeSeconds(), todayLocal));
+    }
+
+    /// <summary>The property the row binds to, not just the helper behind it: a <c>=> TimeLabel</c> typo would
+    /// leave the hover swap showing the same lossy string twice and no render test would notice.</summary>
+    [Fact]
+    public void AbsoluteTimeLabel_IsTheAbsoluteForm_NotTheShortOne()
+    {
+        var row = NoteRow.From(TestNotes.Make(1, 1_700_000_000));
+
+        Assert.Equal(NoteRow.FormatAbsoluteTime(1_700_000_000), row.AbsoluteTimeLabel);
+        Assert.NotEqual(row.TimeLabel, row.AbsoluteTimeLabel);
+    }
 }
