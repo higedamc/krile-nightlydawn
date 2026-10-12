@@ -9,11 +9,13 @@ namespace NightlyDawn.App.Timelines;
 
 /// <summary>
 /// One timeline column: a raw KQL query, a bounded newest-first list of <see cref="NoteRow"/>s, and the
-/// loading state. Subscribing asks the <see cref="ITimelineSourceFactory"/> for an anonymous (read-only,
-/// no signer) source and consumes its <see cref="ITimelineSource.StreamAsync"/> on a background task;
-/// account-bound columns arrive with the key store (1b/1f). Every state change is marshalled
-/// through <c>postToUi</c>, so the class has no Avalonia dependency and is unit-tested with a synchronous
-/// poster. "Loading" ends on <see cref="InitialLoadComplete"/> (B6/B9), not on the first note.
+/// loading state. Subscribing resolves the active account from <see cref="IKeyStore"/> (if one was given and
+/// a signer is active), then asks the <see cref="ITimelineSourceFactory"/> for an account-bound source via
+/// <see cref="ITimelineSourceFactory.Create"/>, or an anonymous (read-only, no signer) one via
+/// <see cref="ITimelineSourceFactory.CreateAnonymous"/> when no account is active -- and consumes its
+/// <see cref="ITimelineSource.StreamAsync"/> on a background task. Every state change is marshalled through
+/// <c>postToUi</c>, so the class has no Avalonia dependency and is unit-tested with a synchronous poster.
+/// "Loading" ends on <see cref="InitialLoadComplete"/> (B6/B9), not on the first note.
 ///
 /// <para>Implements <see cref="IPublishedNoteSink"/> (plan §10.1-4) so a successful post/reply/quote/repost
 /// from <see cref="ComposeViewModel"/> or <see cref="NoteRowActions"/> lands here the same way a relay-echoed
@@ -29,6 +31,7 @@ public sealed class TimelineColumnViewModel : INotifyPropertyChanged, IDisposabl
     private readonly int _maxNotes;
     private readonly IProfileStore? _profileStore;
     private readonly Func<Note, NoteRowActions?>? _actionsFactory;
+    private readonly IKeyStore? _keyStore;
     private readonly HashSet<string> _knownIds = new(StringComparer.Ordinal);
 
     private CancellationTokenSource? _streamCts;
@@ -42,7 +45,11 @@ public sealed class TimelineColumnViewModel : INotifyPropertyChanged, IDisposabl
     /// rows show the pubkey-prefix fallback, same as before this leaf.</param>
     /// <param name="actionsFactory">Builds the per-row publish handle (plan §10.1-2). Null leaves every
     /// row's <see cref="NoteRow.Actions"/> null -- the same as before this leaf, and the designer/sample path.</param>
-    public TimelineColumnViewModel(ITimelineSourceFactory factory, Action<Action> postToUi, int maxNotes = DefaultMaxNotes, IProfileStore? profileStore = null, Func<Note, NoteRowActions?>? actionsFactory = null)
+    /// <param name="keyStore">Resolved once per <see cref="Subscribe"/> call for the active account (L5j, plan
+    /// §18.2). Null (the default, and the designer/sample path) means every subscription is anonymous, same as
+    /// before this leaf -- <see cref="IKeyStore"/> is the single source of truth for who is signed in; this class
+    /// never mirrors that into a field of its own.</param>
+    public TimelineColumnViewModel(ITimelineSourceFactory factory, Action<Action> postToUi, int maxNotes = DefaultMaxNotes, IProfileStore? profileStore = null, Func<Note, NoteRowActions?>? actionsFactory = null, IKeyStore? keyStore = null)
     {
         ArgumentNullException.ThrowIfNull(factory);
         ArgumentNullException.ThrowIfNull(postToUi);
@@ -52,6 +59,7 @@ public sealed class TimelineColumnViewModel : INotifyPropertyChanged, IDisposabl
         _maxNotes = maxNotes;
         _profileStore = profileStore;
         _actionsFactory = actionsFactory;
+        _keyStore = keyStore;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -79,6 +87,20 @@ public sealed class TimelineColumnViewModel : INotifyPropertyChanged, IDisposabl
 
     /// <summary>The <see cref="Timeline"/> handed to the factory for the current subscription, or null before the first one.</summary>
     public Timeline? ActiveTimeline { get; private set; }
+
+    /// <summary>True when the column is currently subscribed through <see cref="ITimelineSourceFactory.Create"/>
+    /// (an account resolved and was used), false for an anonymous subscription or before the first one. Read by
+    /// <see cref="WorkspaceViewModel.NotifyAccountLocked"/> to decide which columns need to fall back to
+    /// <see cref="ITimelineSourceFactory.CreateAnonymous"/> once the key store locks or signs out (plan §18.2
+    /// item 4, symmetric half).</summary>
+    public bool IsAccountBound { get; private set; }
+
+    /// <summary>True when the most recent <see cref="Subscribe"/> failed because its query needed a signed-in
+    /// account (<see cref="AccountRequiredException"/>) and none was active. Read by
+    /// <see cref="WorkspaceViewModel.NotifyAccountUnlocked"/> to retry exactly these columns once one becomes
+    /// active, instead of "press Subscribe again" -- a requirement a user has no way to see (plan §18.2 item 4).
+    /// Cleared by the next <see cref="Subscribe"/> attempt, whatever its outcome.</summary>
+    public bool NeedsAccountRetry { get; private set; }
 
     /// <summary>Set by whoever owns this column (its <see cref="TabViewModel"/>, right after
     /// <see cref="TabViewModel.AddColumn"/> builds it) so the column's own close button -- now part of
@@ -110,26 +132,97 @@ public sealed class TimelineColumnViewModel : INotifyPropertyChanged, IDisposabl
         var timeline = new Timeline(Id: Guid.NewGuid().ToString("N"), Title: kql, KqlQuery: kql);
         ActiveTimeline = timeline;
 
-        ITimelineSource source;
+        StreamCompletion = StartAsync(timeline, generation);
+    }
+
+    /// <summary>Resolves the account, opens the source, and runs the stream -- everything <see cref="Subscribe"/>
+    /// used to do inline before the account lookup made it asynchronous. Every mutation below goes through
+    /// <see cref="Post"/> rather than touching fields directly, because by the time an await here resumes, a
+    /// newer <see cref="Subscribe"/> call may already have bumped <see cref="_generation"/> and moved on; the
+    /// generation guard inside <see cref="Post"/> is what drops this call's late result instead of clobbering
+    /// the current one (the one real race the account lookup introduces).</summary>
+    private async Task StartAsync(Timeline timeline, int generation)
+    {
+        Account? account;
         try
         {
-            source = _factory.CreateAnonymous(timeline);
+            account = await ResolveAccountAsync().ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            IsLoading = false;
-            Status = $"Could not open this timeline ({ex.GetType().Name}).";
+            Post(generation, () => ReportFailure(ex));
             return;
         }
 
-        IsLoading = true;
-        Status = "Loading…";
+        if (generation != _generation || _disposed)
+        {
+            return; // Superseded while the account was resolving; nothing was opened yet, so there is nothing to cancel.
+        }
+
+        ITimelineSource source;
+        try
+        {
+            source = account is null ? _factory.CreateAnonymous(timeline) : _factory.Create(timeline, account);
+        }
+        catch (Exception ex)
+        {
+            Post(generation, () => ReportFailure(ex));
+            return;
+        }
 
         var cts = new CancellationTokenSource();
-        var token = cts.Token; // Read here, on the UI thread: the background task must never touch the source itself (it may be disposed by then).
-        _streamCts = cts;
-        StreamCompletion = Task.Run(() => ConsumeAsync(source, generation, token), CancellationToken.None);
+        var token = cts.Token; // Captured here; the background task must never touch the source itself (it may be disposed by then).
+
+        Post(generation, () =>
+        {
+            _streamCts = cts;
+            IsAccountBound = account is not null;
+            NeedsAccountRetry = false;
+            IsLoading = true;
+            Status = "Loading…";
+        });
+
+        await Task.Run(() => ConsumeAsync(source, generation, token), CancellationToken.None).ConfigureAwait(false);
     }
+
+    /// <summary>Resolves the active account through <see cref="_keyStore"/>, or null when there is no key store
+    /// or nothing is unlocked this session -- both are the ordinary "read anonymously" case, not a failure
+    /// (<see cref="ITimelineSourceFactory.CreateAnonymous"/> is still a valid, read-only path).</summary>
+    private async Task<Account?> ResolveAccountAsync()
+    {
+        if (_keyStore is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var signer = await _keyStore.GetActiveSignerAsync().ConfigureAwait(false);
+            return new Account(signer.Pubkey, signer);
+        }
+        catch (SignerUnavailableException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Sets the failure state <see cref="StartAsync"/>'s two catch blocks share. <see cref="NightlyDawnException"/>
+    /// subtypes write their own user-facing <see cref="Exception.Message"/> (plan §18.2 item 3) -- in particular
+    /// <see cref="AccountRequiredException"/>'s, which is the one case that also arms <see cref="NeedsAccountRetry"/>.
+    /// Anything else names the exception type only, same as before this leaf: an unexpected exception's message
+    /// could echo relay- or input-supplied text, and the status line is not a log.</summary>
+    private void ReportFailure(Exception ex)
+    {
+        IsLoading = false;
+        IsAccountBound = false;
+        NeedsAccountRetry = ex is AccountRequiredException;
+        Status = DescribeFailure(ex);
+    }
+
+    private static string DescribeFailure(Exception ex) =>
+        ex is NightlyDawnException nde
+            ? $"Could not open this timeline: {nde.Message}"
+            : $"Could not open this timeline ({ex.GetType().Name}).";
 
     public void Dispose()
     {

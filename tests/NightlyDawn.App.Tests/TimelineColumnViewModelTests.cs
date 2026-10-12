@@ -131,6 +131,10 @@ public class TimelineColumnViewModelTests
     [Fact]
     public void FactoryFailure_IsReportedInStatus_NotThrown()
     {
+        // FilterParseException is a NightlyDawnException: its own Message is written for a user, so the status
+        // line quotes it instead of just naming the type (plan §18.2 item 3) -- unlike an exception type nobody
+        // anticipated, which still gets the type-name-only fallback (see the InvalidOperationException case in
+        // PropertyChanged_FiresForQueryStatusAndLoading below).
         var factory = new FakeTimelineSourceFactory { ThrowOnCreate = new FilterParseException("bad kql") };
         using var vm = NewViewModel(factory);
         vm.Query = "from nowhere(";
@@ -138,8 +142,103 @@ public class TimelineColumnViewModelTests
         vm.Subscribe();
 
         Assert.False(vm.IsLoading);
-        Assert.Equal("Could not open this timeline (FilterParseException).", vm.Status);
+        Assert.Equal("Could not open this timeline: bad kql", vm.Status);
         Assert.Empty(vm.Notes);
+        Assert.False(vm.NeedsAccountRetry); // FilterParseException is not AccountRequiredException: nothing to retry once a key appears.
+    }
+
+    [Fact]
+    public void AccountRequiredException_QuotesItsOwnMessage_AndArmsNeedsAccountRetry()
+    {
+        var factory = new FakeTimelineSourceFactory { ThrowOnCreate = new AccountRequiredException(FilterSourceKind.Home) };
+        using var vm = NewViewModel(factory);
+        vm.Query = "from home";
+
+        vm.Subscribe();
+
+        Assert.False(vm.IsLoading);
+        Assert.Equal("Could not open this timeline: 'from home' needs a signed-in account.", vm.Status);
+        Assert.True(vm.NeedsAccountRetry);
+        Assert.False(vm.IsAccountBound);
+    }
+
+    [Fact]
+    public async Task Subscribe_WithAnActiveSigner_UsesTheAccountPath_AndSetsIsAccountBound()
+    {
+        var source = new FakeTimelineSource();
+        var factory = new FakeTimelineSourceFactory().Enqueue(source);
+        var signer = new SignerDescriptor("ab".PadRight(64, '1'), SignerKind.Nip49Local);
+        var keyStore = new FakeKeyStore { ActiveSigner = signer };
+        using var vm = new TimelineColumnViewModel(factory, postToUi: action => action(), keyStore: keyStore);
+        vm.Query = "from home";
+
+        vm.Subscribe();
+
+        Assert.Empty(factory.AnonymousCalls);
+        var call = Assert.Single(factory.AccountCalls);
+        Assert.Equal(signer.Pubkey, call.Account.Pubkey);
+        Assert.True(vm.IsAccountBound);
+        Assert.False(vm.NeedsAccountRetry);
+
+        source.Push(new InitialLoadComplete());
+        source.Complete();
+        await vm.StreamCompletion.WaitAsync(Timeout);
+    }
+
+    [Fact]
+    public void Subscribe_WithAKeyStoreButNoActiveSigner_FallsBackToAnonymous()
+    {
+        var source = new FakeTimelineSource();
+        var factory = new FakeTimelineSourceFactory().Enqueue(source);
+        var keyStore = new FakeKeyStore(); // No ActiveSigner set: GetActiveSignerAsync throws SignerUnavailableException, same as a locked/no-key store.
+        using var vm = new TimelineColumnViewModel(factory, postToUi: action => action(), keyStore: keyStore);
+        vm.Query = "from user(\"npub1...\")";
+
+        vm.Subscribe();
+
+        var timeline = Assert.Single(factory.AnonymousCalls);
+        Assert.Empty(factory.AccountCalls);
+        Assert.Equal(timeline, vm.ActiveTimeline);
+        Assert.False(vm.IsAccountBound);
+    }
+
+    /// <summary>The one real race the account lookup introduced (plan §18.2 item 2): a second
+    /// <see cref="TimelineColumnViewModel.Subscribe"/> must win over a first one whose account lookup is still
+    /// in flight when it finally resolves. <see cref="Fakes.FakeKeyStore.ActiveSignerDelay"/> is a one-shot, so
+    /// generation 1's call consumes it (and blocks on it) while generation 2's call falls through to the
+    /// already-set <see cref="Fakes.FakeKeyStore.ActiveSigner"/> and resolves immediately -- without the
+    /// generation guard inside <c>Post</c>, generation 1's eventual, late success would overwrite generation 2's
+    /// <see cref="TimelineColumnViewModel.ActiveTimeline"/>/<see cref="TimelineColumnViewModel.IsAccountBound"/>
+    /// state, or call the factory a second time, even though the user had already moved on.</summary>
+    [Fact]
+    public async Task LateAccountResolution_FromASupersededSubscribe_IsDropped()
+    {
+        var staleSigner = new SignerDescriptor("ab".PadRight(64, '1'), SignerKind.Nip49Local);
+        var delay = new TaskCompletionSource<SignerDescriptor>();
+        var keyStore = new FakeKeyStore { ActiveSignerDelay = delay };
+        var source = new FakeTimelineSource();
+        var factory = new FakeTimelineSourceFactory().Enqueue(source); // Only one source queued: generation 1 must never reach the factory at all.
+        using var vm = new TimelineColumnViewModel(factory, postToUi: action => action(), keyStore: keyStore);
+
+        vm.Query = "from home";
+        vm.Subscribe(); // Generation 1: suspends inside ResolveAccountAsync, waiting on `delay`.
+        var staleCompletion = vm.StreamCompletion;
+        Assert.False(vm.IsAccountBound); // Still resolving -- nothing decided yet.
+
+        keyStore.ActiveSigner = staleSigner; // ActiveSignerDelay was already consumed by generation 1's call, so generation 2's call reads this instead.
+        vm.Subscribe(); // Generation 2: resolves inline (an already-completed task), wins the account path synchronously.
+
+        Assert.True(vm.IsAccountBound);
+        var secondTimeline = vm.ActiveTimeline;
+        Assert.Single(factory.AccountCalls);
+
+        delay.SetResult(staleSigner); // Generation 1's lookup finally completes, long after generation 2 already won.
+        await staleCompletion.WaitAsync(Timeout);
+
+        Assert.Same(secondTimeline, vm.ActiveTimeline); // Untouched by generation 1's late arrival.
+        Assert.Single(factory.AccountCalls); // Generation 1 never got far enough to call the factory a second time.
+        Assert.Empty(factory.AnonymousCalls);
+        Assert.True(vm.IsAccountBound);
     }
 
     [Theory]

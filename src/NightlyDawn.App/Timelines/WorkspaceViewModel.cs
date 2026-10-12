@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using NightlyDawn.App.Composing;
+using NightlyDawn.Core;
 
 namespace NightlyDawn.App.Timelines;
 
@@ -87,6 +88,44 @@ public sealed class WorkspaceViewModel : INotifyPropertyChanged, IDisposable
         var tab = new TabViewModel(title, _columnFactory);
         tab.AddColumn();
         return tab;
+    }
+
+    /// <summary>Retries exactly the columns, across every tab, whose last <see cref="TimelineColumnViewModel.Subscribe"/>
+    /// failed because it needed a signed-in account and none was active yet
+    /// (<see cref="TimelineColumnViewModel.NeedsAccountRetry"/>). Called once the key store reports an active
+    /// signer (plan §18.2 item 4): "press Subscribe again" is not a requirement a user can see, so this does it
+    /// for them. A column whose query never needed an account is untouched -- re-subscribing it would just
+    /// restart an already-working stream for no reason.</summary>
+    public void NotifyAccountUnlocked()
+    {
+        foreach (var tab in Tabs)
+        {
+            foreach (var column in tab.Columns)
+            {
+                if (column.NeedsAccountRetry)
+                {
+                    column.Subscribe();
+                }
+            }
+        }
+    }
+
+    /// <summary>Symmetric counterpart of <see cref="NotifyAccountUnlocked"/>: when the key store locks or signs
+    /// out, every column currently bound to that account (<see cref="TimelineColumnViewModel.IsAccountBound"/>)
+    /// is re-subscribed so it falls back to <see cref="ITimelineSourceFactory.CreateAnonymous"/> instead of
+    /// silently continuing to show a feed for an account that is no longer unlocked.</summary>
+    public void NotifyAccountLocked()
+    {
+        foreach (var tab in Tabs)
+        {
+            foreach (var column in tab.Columns)
+            {
+                if (column.IsAccountBound)
+                {
+                    column.Subscribe();
+                }
+            }
+        }
     }
 
     /// <summary>Disposes every tab (plan §11.3: closing the window closes everything under the workspace).</summary>

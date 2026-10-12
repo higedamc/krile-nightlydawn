@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using Avalonia;
@@ -24,6 +25,7 @@ public sealed partial class MainWindow : Window
     private readonly WorkspaceViewModel _workspace;
     private readonly KeyPanelViewModel _keys;
     private readonly ThemeSwitcherViewModel _theme;
+    private KeyPanelState _lastKeyState = KeyPanelState.Unavailable;
 
     public MainWindow()
     {
@@ -55,8 +57,10 @@ public sealed partial class MainWindow : Window
             theme => ThemeController.Apply(Application.Current!, theme));
         this.FindControl<ThemeSwitcherView>("ThemeSwitcher")!.Attach(_theme);
 
-        // Keys panel: talks to Core's IKeyStore only (the host constructs the real store). Independent of the workspace.
+        // Keys panel: talks to Core's IKeyStore only (the host constructs the real store). Independent of the workspace,
+        // except for the notification wired below (L5j, plan §18.2 item 4).
         _keys = new KeyPanelViewModel(AppServices.KeyStore, postToUi: action => Dispatcher.UIThread.Post(action));
+        _keys.PropertyChanged += OnKeysPropertyChanged;
         this.FindControl<KeysPanelView>("KeysPanel")!.Attach(_keys);
 
         Opened += OnOpened;
@@ -81,8 +85,38 @@ public sealed partial class MainWindow : Window
             AppServices.TimelineSourceFactory,
             postToUi: action => Dispatcher.UIThread.Post(action),
             profileStore: AppServices.ProfileStore,
-            actionsFactory: note => new NoteRowActions(note, () => AppServices.NotePublisher, _compose, column!, column!.ReportStatus));
+            actionsFactory: note => new NoteRowActions(note, () => AppServices.NotePublisher, _compose, column!, column!.ReportStatus),
+            keyStore: AppServices.KeyStore);
         return column;
+    }
+
+    /// <summary>
+    /// The other half of L5j (plan §18.2 item 4): a column that failed with <c>AccountRequiredException</c> has
+    /// no way to notice, on its own, that a key just became available -- it only ever looks again when something
+    /// calls <see cref="TimelineColumnViewModel.Subscribe"/>. <see cref="KeyPanelViewModel.State"/> is the one
+    /// signal this window has for "the key store's answer to 'who is active' just changed", so this is the one
+    /// place that turns it into <see cref="WorkspaceViewModel.NotifyAccountUnlocked"/>/
+    /// <see cref="WorkspaceViewModel.NotifyAccountLocked"/> calls. <c>_lastKeyState</c> tracks the previous value
+    /// by hand because <see cref="PropertyChangedEventArgs"/> carries no old value of its own.
+    /// </summary>
+    private void OnKeysPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(KeyPanelViewModel.State))
+        {
+            return;
+        }
+
+        var wasUnlocked = _lastKeyState == KeyPanelState.Unlocked;
+        _lastKeyState = _keys.State;
+
+        if (_keys.State == KeyPanelState.Unlocked)
+        {
+            _workspace.NotifyAccountUnlocked();
+        }
+        else if (wasUnlocked)
+        {
+            _workspace.NotifyAccountLocked();
+        }
     }
 
     private void OnOpened(object? sender, EventArgs e)
