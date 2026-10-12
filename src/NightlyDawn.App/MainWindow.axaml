@@ -12,6 +12,8 @@
          a horizontal sibling of the title stack costs 0 extra vertical DIP, unlike its old home inside
          WorkspaceView. -->
     <DockPanel DockPanel.Dock="Top">
+      <!-- Docked first, so it is the rightmost item in the row and the tab strip grows leftwards from it (L8). -->
+      <views:ThemeSwitcherView x:Name="ThemeSwitcher" DockPanel.Dock="Right" Margin="12,0,0,0" VerticalAlignment="Center" />
       <views:TabStripView DockPanel.Dock="Right" VerticalAlignment="Center" />
       <StackPanel Spacing="4">
         <TextBlock Text="Krile NightlyDawn" FontSize="28" FontWeight="SemiBold" />

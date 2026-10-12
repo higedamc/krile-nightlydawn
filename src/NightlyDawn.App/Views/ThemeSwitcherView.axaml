@@ -1,0 +1,18 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:theming="using:NightlyDawn.App.Theming"
+             x:Class="NightlyDawn.App.Views.ThemeSwitcherView"
+             x:DataType="theming:ThemeSwitcherViewModel">
+  <!-- Lives in MainWindow's header row, to the right of TabStripView (plan §16.3): a horizontal sibling of the
+       title costs 0 vertical DIP. The vertical budget is the scarce one here: PR #30's review measured the
+       timeline down to 19 DIP on this Mac and 0 on Linux once two docked rows were added above it. -->
+  <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+    <TextBlock Text="Theme" VerticalAlignment="Center" Opacity="0.7" />
+    <ComboBox x:Name="ThemeSelector"
+              MinWidth="104"
+              ItemsSource="{Binding Options}"
+              SelectedItem="{Binding Selected, Mode=TwoWay}"
+              ToolTip.Tip="Light or dark Krile purple. System follows the OS setting. Not remembered after you quit (yet)."
+              DisplayMemberBinding="{Binding Label}" />
+  </StackPanel>
+</UserControl>
