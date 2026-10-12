@@ -9,6 +9,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using NightlyDawn.App.Composing;
 using NightlyDawn.App.Keys;
+using NightlyDawn.App.Theming;
 using NightlyDawn.App.Timelines;
 using NightlyDawn.App.Views;
 
@@ -22,6 +23,7 @@ public sealed partial class MainWindow : Window
     private readonly ComposeViewModel _compose;
     private readonly WorkspaceViewModel _workspace;
     private readonly KeyPanelViewModel _keys;
+    private readonly ThemeSwitcherViewModel _theme;
 
     public MainWindow()
     {
@@ -44,6 +46,14 @@ public sealed partial class MainWindow : Window
         // §11.1).
         _workspace = new WorkspaceViewModel(CreateColumn);
         DataContext = _workspace; // WorkspaceView inherits this, same as TimelineColumnView did before 0e-b/L4.
+
+        // Theme switch (L8): the only mutable state it needs is the running Application's variant, so it is
+        // independent of the workspace and of the key store. Seeded from the host's choice; the choice made here
+        // is not written back to AppServices (see ThemeSwitcherViewModel) and is not persisted (that is L9).
+        _theme = new ThemeSwitcherViewModel(
+            AppServices.Theme,
+            theme => ThemeController.Apply(Application.Current!, theme));
+        this.FindControl<ThemeSwitcherView>("ThemeSwitcher")!.Attach(_theme);
 
         // Keys panel: talks to Core's IKeyStore only (the host constructs the real store). Independent of the workspace.
         _keys = new KeyPanelViewModel(AppServices.KeyStore, postToUi: action => Dispatcher.UIThread.Post(action));
