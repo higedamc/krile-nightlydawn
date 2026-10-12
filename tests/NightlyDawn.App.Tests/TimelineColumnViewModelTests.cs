@@ -165,7 +165,7 @@ public class TimelineColumnViewModelTests
     [Fact]
     public async Task Subscribe_WithAnActiveSigner_UsesTheAccountPath_AndSetsIsAccountBound()
     {
-        var source = new FakeTimelineSource();
+        var source = new FakeTimelineSource { IsAccountBound = true }; // `from home` is an account-bound source.
         var factory = new FakeTimelineSourceFactory().Enqueue(source);
         var signer = new SignerDescriptor("ab".PadRight(64, '1'), SignerKind.Nip49Local);
         var keyStore = new FakeKeyStore { ActiveSigner = signer };
@@ -179,6 +179,32 @@ public class TimelineColumnViewModelTests
         Assert.Equal(signer.Pubkey, call.Account.Pubkey);
         Assert.True(vm.IsAccountBound);
         Assert.False(vm.NeedsAccountRetry);
+
+        source.Push(new InitialLoadComplete());
+        source.Complete();
+        await vm.StreamCompletion.WaitAsync(Timeout);
+    }
+
+    /// <summary>The L5j wart this leaf fixes (plan §18.5): being signed in routes <em>every</em> query through
+    /// <see cref="ITimelineSourceFactory.Create"/>, account-bound or not. <see cref="TimelineColumnViewModel.IsAccountBound"/>
+    /// must still answer false for a query like <c>from kind("1")</c> that never consumes the account, or
+    /// <see cref="WorkspaceViewModel.NotifyAccountLocked"/> would wrongly resubscribe (and clear) a column that
+    /// has nothing to do with the account that just locked.</summary>
+    [Fact]
+    public async Task Subscribe_WithAnActiveSigner_ButAnAccountIndifferentQuery_LeavesIsAccountBoundFalse()
+    {
+        var source = new FakeTimelineSource(); // IsAccountBound defaults to false: this source never touches the account.
+        var factory = new FakeTimelineSourceFactory().Enqueue(source);
+        var signer = new SignerDescriptor("ab".PadRight(64, '1'), SignerKind.Nip49Local);
+        var keyStore = new FakeKeyStore { ActiveSigner = signer };
+        using var vm = new TimelineColumnViewModel(factory, postToUi: action => action(), keyStore: keyStore);
+        vm.Query = "from kind(\"1\")";
+
+        vm.Subscribe();
+
+        var call = Assert.Single(factory.AccountCalls); // Still routed through Create() -- a signer is active.
+        Assert.Equal(signer.Pubkey, call.Account.Pubkey);
+        Assert.False(vm.IsAccountBound); // ...but the compiled query itself never bound to it.
 
         source.Push(new InitialLoadComplete());
         source.Complete();
@@ -216,7 +242,7 @@ public class TimelineColumnViewModelTests
         var staleSigner = new SignerDescriptor("ab".PadRight(64, '1'), SignerKind.Nip49Local);
         var delay = new TaskCompletionSource<SignerDescriptor>();
         var keyStore = new FakeKeyStore { ActiveSignerDelay = delay };
-        var source = new FakeTimelineSource();
+        var source = new FakeTimelineSource { IsAccountBound = true }; // `from home` is an account-bound source.
         var factory = new FakeTimelineSourceFactory().Enqueue(source); // Only one source queued: generation 1 must never reach the factory at all.
         using var vm = new TimelineColumnViewModel(factory, postToUi: action => action(), keyStore: keyStore);
 

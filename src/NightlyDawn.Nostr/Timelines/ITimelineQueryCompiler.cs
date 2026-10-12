@@ -20,5 +20,15 @@ public interface ITimelineQueryCompiler
     /// <param name="accountPubkey">The signed-in account's own pubkey, or null for <see cref="NostrTimelineSourceFactory.CreateAnonymous"/>.</param>
     /// <exception cref="FilterParseException">The query text is not understood.</exception>
     /// <exception cref="AccountRequiredException">The query's source (<c>from home</c>/<c>from mentions</c>) needs an account and <paramref name="accountPubkey"/> is null.</exception>
-    Func<CancellationToken, Task<CompiledFilter>> Compile(string query, string? accountPubkey);
+    CompiledQuery Compile(string query, string? accountPubkey);
 }
+
+/// <summary>What <see cref="ITimelineQueryCompiler.Compile"/> already knows synchronously, plus the deferred
+/// step that actually produces a <see cref="CompiledFilter"/>.</summary>
+/// <param name="IsAccountBound">True when the query's source needs the signed-in account's identity (<c>from
+/// home</c>/<c>from mentions</c>) -- the same check <c>Compile</c> uses to decide whether to throw
+/// <see cref="AccountRequiredException"/>, known from the parsed source before any I/O, and exposed here so
+/// <see cref="NostrTimelineSourceFactory"/> can stamp it onto the <see cref="ITimelineSource"/> it builds
+/// (plan §18.5) instead of the caller guessing from whether it happened to pass an account.</param>
+/// <param name="ResolveAsync">Resolved at most once by <see cref="NostrTimelineSource"/>, lazily, on first use.</param>
+public sealed record CompiledQuery(bool IsAccountBound, Func<CancellationToken, Task<CompiledFilter>> ResolveAsync);

@@ -23,6 +23,10 @@ public sealed class SampleTimelineSourceFactory(TimeSpan? liveNoteDelay = null) 
         public const int BacklogCount = 3;
         private const string SampleAuthor = "0000000000000000000000000000000000000000000000000000000000000000";
 
+        // Always anonymous: SampleTimelineSourceFactory.Create delegates to CreateAnonymous above, so no sample
+        // source ever consumes an account's identity.
+        public bool IsAccountBound => false;
+
         public async IAsyncEnumerable<TimelineUpdate> StreamAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();

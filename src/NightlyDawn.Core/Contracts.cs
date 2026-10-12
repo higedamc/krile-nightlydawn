@@ -77,6 +77,15 @@ public interface IKeyStore
 /// <summary>A live feed behind a <see cref="Timeline"/> column. Implemented in phase 1 by composing <see cref="INostrBackend"/> and <see cref="IFilterCompiler"/>.</summary>
 public interface ITimelineSource
 {
+    /// <summary>True when this source's compiled query actually consumes the signed-in account's identity
+    /// (<c>from home</c>/<c>from mentions</c>) -- not merely whether this source happened to be built through
+    /// <see cref="ITimelineSourceFactory.Create"/> rather than <see cref="ITimelineSourceFactory.CreateAnonymous"/>.
+    /// A query that never needs an account (e.g. <c>from kind("1")</c>) answers false here even when a caller
+    /// is signed in and used <c>Create</c>, so a workspace reacting to lock/sign-out
+    /// (plan §18.2 item 4) knows which columns actually need to fall back to <c>CreateAnonymous</c> and which
+    /// can keep streaming untouched (plan §18.5 -- the L5j wart this corrects).</summary>
+    bool IsAccountBound { get; }
+
     IAsyncEnumerable<TimelineUpdate> StreamAsync(CancellationToken cancellationToken = default);
 
     /// <param name="beforeCreatedAt">Page strictly older than this timestamp — Nostr pages by <c>until</c>, and note ids can be evicted from relay storage (B9).</param>

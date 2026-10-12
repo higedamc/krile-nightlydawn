@@ -88,8 +88,13 @@ public sealed class TimelineColumnViewModel : INotifyPropertyChanged, IDisposabl
     /// <summary>The <see cref="Timeline"/> handed to the factory for the current subscription, or null before the first one.</summary>
     public Timeline? ActiveTimeline { get; private set; }
 
-    /// <summary>True when the column is currently subscribed through <see cref="ITimelineSourceFactory.Create"/>
-    /// (an account resolved and was used), false for an anonymous subscription or before the first one. Read by
+    /// <summary>True when the column's current <see cref="ITimelineSource"/> actually consumes the signed-in
+    /// account's identity (<see cref="ITimelineSource.IsAccountBound"/>) -- not merely whether one was resolved
+    /// and the subscription went through <see cref="ITimelineSourceFactory.Create"/> rather than
+    /// <see cref="ITimelineSourceFactory.CreateAnonymous"/>. A query like <c>from kind("1")</c> opened while
+    /// signed in still opens through <c>Create</c> but answers false here, because the compiled query never
+    /// touches the account (plan §18.5 -- fixes the L5j wart where this used to be <c>account is not null</c>,
+    /// which made <em>every</em> column look account-bound while any key was unlocked). Read by
     /// <see cref="WorkspaceViewModel.NotifyAccountLocked"/> to decide which columns need to fall back to
     /// <see cref="ITimelineSourceFactory.CreateAnonymous"/> once the key store locks or signs out (plan §18.2
     /// item 4, symmetric half).</summary>
@@ -176,7 +181,7 @@ public sealed class TimelineColumnViewModel : INotifyPropertyChanged, IDisposabl
         Post(generation, () =>
         {
             _streamCts = cts;
-            IsAccountBound = account is not null;
+            IsAccountBound = source.IsAccountBound;
             NeedsAccountRetry = false;
             IsLoading = true;
             Status = "Loading…";

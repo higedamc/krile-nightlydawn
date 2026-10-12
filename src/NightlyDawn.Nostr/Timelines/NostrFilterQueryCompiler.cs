@@ -13,11 +13,12 @@ public sealed class NostrFilterQueryCompiler(IFilterCompiler filterCompiler, ICo
     /// <exception cref="FilterParseException">The query text is not understood.</exception>
     /// <exception cref="AccountRequiredException">The source is <c>from home</c> or <c>from mentions</c> and <paramref name="accountPubkey"/> is null.</exception>
     /// <exception cref="UnsupportedFilterFieldException">The source or a <c>where</c> field is recognized but not compilable yet (e.g. <c>from list</c>) -- thrown here, synchronously, same as the two exceptions above: every source other than <c>from home</c> needs no I/O to know this.</exception>
-    public Func<CancellationToken, Task<CompiledFilter>> Compile(string query, string? accountPubkey)
+    public CompiledQuery Compile(string query, string? accountPubkey)
     {
         var ast = filterCompiler.Parse(query);
+        var isAccountBound = RequiresAccount(ast.Source.Kind);
 
-        if (accountPubkey is null && RequiresAccount(ast.Source.Kind))
+        if (accountPubkey is null && isAccountBound)
         {
             throw new AccountRequiredException(ast.Source.Kind);
         }
@@ -26,13 +27,13 @@ public sealed class NostrFilterQueryCompiler(IFilterCompiler filterCompiler, ICo
         {
             // The only source that needs I/O: the follow list is not known yet, so compiling has to wait for it.
             // Deferred to the returned delegate rather than done here so a bad query still fails synchronously above.
-            return cancellationToken => ResolveHomeAsync(ast, accountPubkey!, cancellationToken);
+            return new CompiledQuery(isAccountBound, cancellationToken => ResolveHomeAsync(ast, accountPubkey!, cancellationToken));
         }
 
         // Every other source (including `from mentions`, which only needs the pubkey it already has) compiles
         // with no I/O, so there is nothing to defer.
         var compiled = filterCompiler.Compile(ast, accountPubkey);
-        return _ => Task.FromResult(compiled);
+        return new CompiledQuery(isAccountBound, _ => Task.FromResult(compiled));
     }
 
     private static bool RequiresAccount(FilterSourceKind kind) => kind is FilterSourceKind.Home or FilterSourceKind.Mentions;

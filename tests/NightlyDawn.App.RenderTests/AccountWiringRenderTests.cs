@@ -92,6 +92,46 @@ public sealed class AccountWiringRenderTests
         Assert.True(column.NeedsAccountRetry);
     }
 
+    /// <summary>Plan §18.5 (L5k) -- the wart L5j left behind. Opening a column while unlocked always goes
+    /// through <see cref="ITimelineSourceFactory.Create"/>, even for a query like <c>from kind("1")</c> that
+    /// never touches the account; before this leaf <see cref="TimelineColumnViewModel.IsAccountBound"/> was
+    /// <c>account is not null</c>, so it came back true regardless, and <see cref="WorkspaceViewModel.NotifyAccountLocked"/>
+    /// resubscribed (and cleared) a column that had nothing to do with the account that just locked. The
+    /// negative control is the sibling test above (and the second column here): an actually account-bound
+    /// <c>from home</c> column must still flip back to anonymous on the very same Lock click.</summary>
+    [AvaloniaFact]
+    public void Locking_DoesNotTouchAColumnWhoseQueryNeverBoundToTheAccount()
+    {
+        using var session = new Session();
+        session.GenerateKey(); // Unlocked before either column opens, so both open through Create().
+
+        var indifferentColumn = session.Column;
+        indifferentColumn.Query = "from kind(\"1\")";
+        indifferentColumn.Subscribe();
+        session.Pump(() => !indifferentColumn.IsLoading, "the kind(1) subscribe never finished");
+        Assert.False(indifferentColumn.IsAccountBound); // Create() ran, but the compiled query never needed the account.
+        Assert.NotEmpty(indifferentColumn.Notes);
+        var notesBeforeLock = indifferentColumn.Notes.ToList();
+
+        var homeColumn = session.AddColumn();
+        homeColumn.Query = "from home";
+        homeColumn.Subscribe();
+        session.Pump(() => !homeColumn.IsLoading, "the home subscribe never finished");
+        Assert.True(homeColumn.IsAccountBound); // Negative control: a genuinely account-bound column, same session.
+
+        session.Click(session.FindByContent<Button>("Lock"));
+        session.Pump(() => !homeColumn.IsAccountBound, "locking never reverted the account-bound column");
+
+        // The account-indifferent column must not have been touched at all: no resubscribe, no clear-and-reload.
+        Assert.True(indifferentColumn.IsAccountBound == false);
+        Assert.Equal(notesBeforeLock, indifferentColumn.Notes.ToList());
+        Assert.False(indifferentColumn.NeedsAccountRetry);
+
+        // The account-bound column, meanwhile, behaved exactly like the single-column test above.
+        Assert.Equal("Could not open this timeline: 'from home' needs a signed-in account.", homeColumn.Status);
+        Assert.True(homeColumn.NeedsAccountRetry);
+    }
+
     /// <summary>Owns one headless window, a temp-dir-backed real <see cref="LocalKeyStore"/> (same construction
     /// as <c>MainWindowRenderTests</c>'s session -- the host builds a real one too), and the account-gated fake
     /// factory. Generates the key through the real <c>KeysPanelView</c> controls rather than calling
@@ -128,6 +168,10 @@ public sealed class AccountWiringRenderTests
 
             Column = ((WorkspaceViewModel)Window.DataContext!).Tabs[0].Columns[0];
         }
+
+        /// <summary>A second column in the same tab/workspace -- for a test that needs one column whose query
+        /// never binds the account alongside one that does, both reacting to the same Lock.</summary>
+        public TimelineColumnViewModel AddColumn() => ((WorkspaceViewModel)Window.DataContext!).Tabs[0].AddColumn();
 
         /// <summary>Drives the real Generate button -- the passphrase text boxes and the click -- the same way
         /// a user does, and waits for the panel to actually reach Unlocked before returning.</summary>
