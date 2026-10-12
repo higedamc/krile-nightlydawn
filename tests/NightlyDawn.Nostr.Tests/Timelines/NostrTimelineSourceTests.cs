@@ -307,6 +307,31 @@ public class NostrTimelineSourceTests
         Assert.Throws<AccountRequiredException>(() => factory.CreateAnonymous(new Timeline("c", "mentions", "from mentions where ()")));
     }
 
+    /// <summary>Plan §18.5 (L5k): being signed in routes every query through <c>Create</c>, but
+    /// <see cref="ITimelineSource.IsAccountBound"/> must still reflect what the compiled query actually needed,
+    /// not merely that <c>Create</c> (rather than <c>CreateAnonymous</c>) was called. End to end through the
+    /// real <see cref="NostrFilterQueryCompiler"/> and <see cref="NightlyDawn.Filters.FilterCompiler"/> -- no
+    /// stub answering a hand-picked bool -- so this fails if the real KQL source-kind check that
+    /// <see cref="AccountRequiredException"/> already relies on ever stops being the thing
+    /// <see cref="ITimelineSource.IsAccountBound"/> is derived from.</summary>
+    [Fact]
+    public void Factory_Create_IsAccountBound_ReflectsTheCompiledSource_NotWhetherCreateWasUsed()
+    {
+        var (factory, _, _) = NewFactory(["wss://r.example"]);
+        var account = new Account("00", new SignerDescriptor("00", SignerKind.Nip46));
+
+        // `from kind("1")` never needs the account's identity, even though the caller is signed in and this
+        // still goes through Create() (the viewmodel-level wart L5k fixes).
+        var kindSource = factory.Create(Kind1, account);
+        Assert.False(kindSource.IsAccountBound);
+
+        var homeSource = factory.Create(new Timeline("c", "home", "from home where ()"), account);
+        Assert.True(homeSource.IsAccountBound);
+
+        var mentionsSource = factory.Create(new Timeline("c", "mentions", "from mentions where ()"), account);
+        Assert.True(mentionsSource.IsAccountBound);
+    }
+
     [Fact]
     public void Factory_RequiresAtLeastOneRelay()
     {
@@ -350,10 +375,10 @@ public class NostrTimelineSourceTests
     {
         public string? LastQuery { get; private set; }
 
-        public Func<CancellationToken, Task<CompiledFilter>> Compile(string query, string? accountPubkey)
+        public CompiledQuery Compile(string query, string? accountPubkey)
         {
             LastQuery = query;
-            return _ => Task.FromResult(result);
+            return new CompiledQuery(IsAccountBound: false, _ => Task.FromResult(result));
         }
     }
 }

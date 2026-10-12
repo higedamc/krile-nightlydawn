@@ -49,9 +49,10 @@ public class NostrFilterQueryCompilerTests
         // Mutating Compile to call the contact list source eagerly would make this fail: the fetch has not
         // happened yet when Compile returns, only once the delegate below is awaited.
         var deferred = sut.Compile("from home where ()", AccountPubkey);
+        Assert.True(deferred.IsAccountBound);
         Assert.Equal(0, contactList.FetchCalls);
 
-        var compiled = await deferred(CancellationToken.None);
+        var compiled = await deferred.ResolveAsync(CancellationToken.None);
 
         Assert.Equal(1, contactList.FetchCalls);
         Assert.Equal(["bob"], compiled.RelayFilter.Authors);
@@ -62,7 +63,7 @@ public class NostrFilterQueryCompilerTests
     {
         var sut = new NostrFilterQueryCompiler(new FilterCompiler(), new FakeContactListSource());
 
-        var compiled = await sut.Compile("from home where ()", AccountPubkey)(CancellationToken.None);
+        var compiled = await sut.Compile("from home where ()", AccountPubkey).ResolveAsync(CancellationToken.None);
 
         // Mutating `Authors: []` to `Authors: null` would turn "follows nobody yet" into "match any author".
         Assert.NotNull(compiled.RelayFilter.Authors);
@@ -77,6 +78,20 @@ public class NostrFilterQueryCompilerTests
 
         var deferred = sut.Compile("from mentions where ()", AccountPubkey);
 
+        Assert.True(deferred.IsAccountBound);
         Assert.Equal(0, contactList.FetchCalls);
+    }
+
+    /// <summary>Plan §18.5 (L5k): a source that never needs the account must report it, synchronously, same as
+    /// the home/mentions cases above report true -- this is what <see cref="NostrTimelineSourceFactory"/> stamps
+    /// onto <see cref="ITimelineSource.IsAccountBound"/> regardless of whether the caller happened to supply an
+    /// account at all.</summary>
+    [Fact]
+    public void Compile_FromKind_IsNotAccountBound_WhetherOrNotAnAccountWasSupplied()
+    {
+        var sut = new NostrFilterQueryCompiler(new FilterCompiler(), new FakeContactListSource());
+
+        Assert.False(sut.Compile("from kind(\"1\") where ()", accountPubkey: null).IsAccountBound);
+        Assert.False(sut.Compile("from kind(\"1\") where ()", AccountPubkey).IsAccountBound);
     }
 }

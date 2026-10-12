@@ -16,6 +16,9 @@ internal sealed class StaticTimelineSourceFactory(IReadOnlyList<Note> notes) : I
 
     private sealed class StaticTimelineSource(IReadOnlyList<Note> notes) : ITimelineSource
     {
+        // Create delegates to CreateAnonymous above: this fake never binds an account.
+        public bool IsAccountBound => false;
+
         public async IAsyncEnumerable<TimelineUpdate> StreamAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             await Task.Yield();

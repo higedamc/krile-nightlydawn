@@ -22,12 +22,16 @@ namespace NightlyDawn.Nostr.Timelines;
 internal sealed class NostrTimelineSource(
     NostrBackend backend,
     IEventMapper mapper,
+    bool isAccountBound,
     Func<CancellationToken, Task<CompiledFilter>> compile,
     Func<CancellationToken, Task> ensureConnected,
     TimeSpan initialLoadTimeout,
     int maxRememberedIds,
     ILogger logger) : ITimelineSource
 {
+    /// <inheritdoc/>
+    public bool IsAccountBound => isAccountBound;
+
     private readonly object _compileGate = new();
     private Task<CompiledFilter>? _compiledTask;
 

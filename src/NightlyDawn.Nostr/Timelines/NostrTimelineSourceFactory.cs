@@ -132,8 +132,8 @@ public sealed class NostrTimelineSourceFactory : ITimelineSourceFactory, IAsyncD
     private ITimelineSource CreateCore(Timeline timeline, string? accountPubkey)
     {
         ArgumentNullException.ThrowIfNull(timeline);
-        var compile = _compiler.Compile(timeline.KqlQuery, accountPubkey);
-        return new NostrTimelineSource(_backend, _backend.Mapper, compile, EnsureConnectedAsync, _initialLoadTimeout, _backend.Options.MaxRememberedEventIdsPerTimeline, _logger);
+        var compiledQuery = _compiler.Compile(timeline.KqlQuery, accountPubkey);
+        return new NostrTimelineSource(_backend, _backend.Mapper, compiledQuery.IsAccountBound, compiledQuery.ResolveAsync, EnsureConnectedAsync, _initialLoadTimeout, _backend.Options.MaxRememberedEventIdsPerTimeline, _logger);
     }
 
     public async ValueTask DisposeAsync()
