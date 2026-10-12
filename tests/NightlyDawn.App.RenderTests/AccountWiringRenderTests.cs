@@ -18,7 +18,7 @@ namespace NightlyDawn.App.RenderTests;
 /// starts streaming once a key is generated through the real Keys panel controls. This is MainWindow's own glue
 /// under test (<c>KeyPanelViewModel.PropertyChanged</c> -> <c>WorkspaceViewModel.NotifyAccountUnlocked</c>/
 /// <c>NotifyAccountLocked</c>), not the view models in isolation -- those already have
-/// <c>TimelineColumnViewModelTests</c> and the mutation-sensitive race test in that class.
+/// <c>TimelineViewModelTests</c> and the mutation-sensitive race test in that class.
 /// </summary>
 public sealed class AccountWiringRenderTests
 {
@@ -52,7 +52,7 @@ public sealed class AccountWiringRenderTests
 
     /// <summary>Negative control for the test above: a column whose query never needs an account must not be
     /// touched by generating one -- <see cref="WorkspaceViewModel.NotifyAccountUnlocked"/> only retries columns
-    /// with <see cref="TimelineColumnViewModel.NeedsAccountRetry"/> set, not every column in the workspace. A
+    /// with <see cref="TimelineViewModel.NeedsAccountRetry"/> set, not every column in the workspace. A
     /// version of that method that resubscribed unconditionally would pass the test above and fail only this one.</summary>
     [AvaloniaFact]
     public void GeneratingAKey_DoesNotTouchAColumnThatNeverNeededAnAccount()
@@ -94,7 +94,7 @@ public sealed class AccountWiringRenderTests
 
     /// <summary>Plan §18.5 (L5k) -- the wart L5j left behind. Opening a column while unlocked always goes
     /// through <see cref="ITimelineSourceFactory.Create"/>, even for a query like <c>from kind("1")</c> that
-    /// never touches the account; before this leaf <see cref="TimelineColumnViewModel.IsAccountBound"/> was
+    /// never touches the account; before this leaf <see cref="TimelineViewModel.IsAccountBound"/> was
     /// <c>account is not null</c>, so it came back true regardless, and <see cref="WorkspaceViewModel.NotifyAccountLocked"/>
     /// resubscribed (and cleared) a column that had nothing to do with the account that just locked. The
     /// negative control is the sibling test above (and the second column here): an actually account-bound
@@ -145,7 +145,7 @@ public sealed class AccountWiringRenderTests
 
         public AccountGatedTimelineSourceFactory Factory { get; }
 
-        public TimelineColumnViewModel Column { get; }
+        public TimelineViewModel Column { get; }
 
         public Session()
         {
@@ -171,7 +171,7 @@ public sealed class AccountWiringRenderTests
 
         /// <summary>A second column in the same tab/workspace -- for a test that needs one column whose query
         /// never binds the account alongside one that does, both reacting to the same Lock.</summary>
-        public TimelineColumnViewModel AddColumn() => ((WorkspaceViewModel)Window.DataContext!).Tabs[0].AddColumn();
+        public TimelineViewModel AddColumn() => ((WorkspaceViewModel)Window.DataContext!).Tabs[0].AddColumn();
 
         /// <summary>Drives the real Generate button -- the passphrase text boxes and the click -- the same way
         /// a user does, and waits for the panel to actually reach Unlocked before returning.</summary>

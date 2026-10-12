@@ -67,7 +67,7 @@ public sealed class NoteRowActions(
         }
         catch (Exception ex)
         {
-            // Type name only (plan §10.4-2), same convention as TimelineColumnViewModel's status line --
+            // Type name only (plan §10.4-2), same convention as TimelineViewModel's status line --
             // e.g. SignerUnavailableException before a key is unlocked, or RelayConnectionException on a
             // socket failure that never reaches an accept/reject outcome.
             setStatus($"Repost failed: {ex.GetType().Name}.");

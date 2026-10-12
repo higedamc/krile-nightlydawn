@@ -2,8 +2,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:tl="using:NightlyDawn.App.Timelines"
              xmlns:views="using:NightlyDawn.App.Views"
-             x:Class="NightlyDawn.App.Views.TimelineColumnView"
-             x:DataType="tl:TimelineColumnViewModel">
+             x:Class="NightlyDawn.App.Views.TimelineView"
+             x:DataType="tl:TimelineViewModel">
   <!-- The one timeline column (1e). Query text goes to the ITimelineSourceFactory verbatim; KQL is compiled downstream (1c). -->
   <Border Padding="12"
           BorderThickness="1" BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"

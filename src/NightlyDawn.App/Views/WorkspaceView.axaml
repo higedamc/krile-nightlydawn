@@ -20,8 +20,8 @@
           </ItemsPanelTemplate>
         </ItemsControl.ItemsPanel>
         <ItemsControl.ItemTemplate>
-          <DataTemplate x:DataType="tl:TimelineColumnViewModel">
-            <views:TimelineColumnView MinWidth="420" />
+          <DataTemplate x:DataType="tl:TimelineViewModel">
+            <views:TimelineView MinWidth="420" />
           </DataTemplate>
         </ItemsControl.ItemTemplate>
       </ItemsControl>

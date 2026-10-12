@@ -47,7 +47,7 @@ public sealed partial class MainWindow : Window
         // opens is built through CreateColumn below, the single place a column is ever constructed (plan
         // §11.1).
         _workspace = new WorkspaceViewModel(CreateColumn);
-        DataContext = _workspace; // WorkspaceView inherits this, same as TimelineColumnView did before 0e-b/L4.
+        DataContext = _workspace; // WorkspaceView inherits this, same as TimelineView did before 0e-b/L4.
 
         // Theme switch (L8): the only mutable state it needs is the running Application's variant, so it is
         // independent of the workspace and of the key store. Seeded from the host's choice; the choice made here
@@ -68,20 +68,20 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// The one place a <see cref="TimelineColumnViewModel"/> is built (plan §11.1): the factory and profile
+    /// The one place a <see cref="TimelineViewModel"/> is built (plan §11.1): the factory and profile
     /// store come from the composition point, never from <c>NightlyDawn.Nostr</c> directly (B9).
     /// <paramref name="column"/>'s <c>actionsFactory</c> closes over the column this call itself produces, not
     /// a field shared across columns -- the required test for this leaf is that column B's row actions report
     /// only to column B, and a factory that closed over one shared field (like the pre-L4 single-column
     /// closure did) would make every column's rows report to whichever column that field pointed at last.
     /// </summary>
-    private TimelineColumnViewModel CreateColumn()
+    private TimelineViewModel CreateColumn()
     {
-        TimelineColumnViewModel? column = null;
+        TimelineViewModel? column = null;
         // column is read here only through this closure, invoked lazily (plan §10.1-2's row-build time, well
         // after this method returns) -- the nullable analyzer cannot see that, since it only tracks flow up
         // to this statement, not when the delegate actually runs.
-        column = new TimelineColumnViewModel(
+        column = new TimelineViewModel(
             AppServices.TimelineSourceFactory,
             postToUi: action => Dispatcher.UIThread.Post(action),
             profileStore: AppServices.ProfileStore,
@@ -93,7 +93,7 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// The other half of L5j (plan §18.2 item 4): a column that failed with <c>AccountRequiredException</c> has
     /// no way to notice, on its own, that a key just became available -- it only ever looks again when something
-    /// calls <see cref="TimelineColumnViewModel.Subscribe"/>. <see cref="KeyPanelViewModel.State"/> is the one
+    /// calls <see cref="TimelineViewModel.Subscribe"/>. <see cref="KeyPanelViewModel.State"/> is the one
     /// signal this window has for "the key store's answer to 'who is active' just changed", so this is the one
     /// place that turns it into <see cref="WorkspaceViewModel.NotifyAccountUnlocked"/>/
     /// <see cref="WorkspaceViewModel.NotifyAccountLocked"/> calls. <c>_lastKeyState</c> tracks the previous value

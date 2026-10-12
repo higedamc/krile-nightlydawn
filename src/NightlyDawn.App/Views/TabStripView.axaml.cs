@@ -10,7 +10,7 @@ public sealed partial class TabStripView : UserControl
     public TabStripView() => AvaloniaXamlLoader.Load(this);
 
     // DataContext is inherited from the host window (MainWindow sets its own DataContext to the
-    // WorkspaceViewModel), not set here -- same pattern WorkspaceView and TimelineColumnView use.
+    // WorkspaceViewModel), not set here -- same pattern WorkspaceView and TimelineView use.
     private WorkspaceViewModel? ViewModel => DataContext as WorkspaceViewModel;
 
     private void OnAddTabClick(object? sender, RoutedEventArgs e) => ViewModel?.AddTab();

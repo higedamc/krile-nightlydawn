@@ -20,11 +20,11 @@ namespace NightlyDawn.App.Timelines;
 /// </summary>
 public sealed class WorkspaceViewModel : INotifyPropertyChanged, IDisposable
 {
-    private readonly Func<TimelineColumnViewModel> _columnFactory;
+    private readonly Func<TimelineViewModel> _columnFactory;
     private TabViewModel? _selectedTab;
     private bool _disposed;
 
-    public WorkspaceViewModel(Func<TimelineColumnViewModel> columnFactory)
+    public WorkspaceViewModel(Func<TimelineViewModel> columnFactory)
     {
         ArgumentNullException.ThrowIfNull(columnFactory);
         _columnFactory = columnFactory;
@@ -90,9 +90,9 @@ public sealed class WorkspaceViewModel : INotifyPropertyChanged, IDisposable
         return tab;
     }
 
-    /// <summary>Retries exactly the columns, across every tab, whose last <see cref="TimelineColumnViewModel.Subscribe"/>
+    /// <summary>Retries exactly the columns, across every tab, whose last <see cref="TimelineViewModel.Subscribe"/>
     /// failed because it needed a signed-in account and none was active yet
-    /// (<see cref="TimelineColumnViewModel.NeedsAccountRetry"/>). Called once the key store reports an active
+    /// (<see cref="TimelineViewModel.NeedsAccountRetry"/>). Called once the key store reports an active
     /// signer (plan §18.2 item 4): "press Subscribe again" is not a requirement a user can see, so this does it
     /// for them. A column whose query never needed an account is untouched -- re-subscribing it would just
     /// restart an already-working stream for no reason.</summary>
@@ -111,7 +111,7 @@ public sealed class WorkspaceViewModel : INotifyPropertyChanged, IDisposable
     }
 
     /// <summary>Symmetric counterpart of <see cref="NotifyAccountUnlocked"/>: when the key store locks or signs
-    /// out, every column currently bound to that account (<see cref="TimelineColumnViewModel.IsAccountBound"/>)
+    /// out, every column currently bound to that account (<see cref="TimelineViewModel.IsAccountBound"/>)
     /// is re-subscribed so it falls back to <see cref="ITimelineSourceFactory.CreateAnonymous"/> instead of
     /// silently continuing to show a feed for an account that is no longer unlocked.</summary>
     public void NotifyAccountLocked()

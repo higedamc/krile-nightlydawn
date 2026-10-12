@@ -13,12 +13,12 @@ namespace NightlyDawn.App.Timelines;
 /// </summary>
 public sealed class TabViewModel : INotifyPropertyChanged, IDisposable
 {
-    private readonly Func<TimelineColumnViewModel> _columnFactory;
+    private readonly Func<TimelineViewModel> _columnFactory;
     private string _title;
-    private TimelineColumnViewModel? _selectedColumn;
+    private TimelineViewModel? _selectedColumn;
     private bool _disposed;
 
-    public TabViewModel(string title, Func<TimelineColumnViewModel> columnFactory)
+    public TabViewModel(string title, Func<TimelineViewModel> columnFactory)
     {
         ArgumentNullException.ThrowIfNull(columnFactory);
         _title = title ?? string.Empty;
@@ -36,17 +36,17 @@ public sealed class TabViewModel : INotifyPropertyChanged, IDisposable
     /// <summary>This tab's columns, left-to-right (plan §11.5). Can reach zero after <see cref="RemoveColumn"/>
     /// removes the last one -- nothing in this class stops that; <see cref="WorkspaceViewModel.ActiveSink"/>
     /// is what turns an empty tab into a null compose target.</summary>
-    public ObservableCollection<TimelineColumnViewModel> Columns { get; } = [];
+    public ObservableCollection<TimelineViewModel> Columns { get; } = [];
 
     /// <summary>Null when <see cref="Columns"/> is empty.</summary>
-    public TimelineColumnViewModel? SelectedColumn
+    public TimelineViewModel? SelectedColumn
     {
         get => _selectedColumn;
         set => SetField(ref _selectedColumn, value);
     }
 
     /// <summary>Builds a new column through the factory, appends it, and selects it.</summary>
-    public TimelineColumnViewModel AddColumn()
+    public TimelineViewModel AddColumn()
     {
         var column = _columnFactory();
         column.RequestClose = () => RemoveColumn(column); // closes over this column only, same as CreateColumn's actionsFactory.
@@ -58,7 +58,7 @@ public sealed class TabViewModel : INotifyPropertyChanged, IDisposable
     /// <summary>Removes <paramref name="column"/> from this tab and disposes it (plan §11.3: closing a column
     /// must stop its relay subscription, not just drop the UI's reference to it). A no-op if the column is not
     /// (or no longer) in this tab.</summary>
-    public void RemoveColumn(TimelineColumnViewModel column)
+    public void RemoveColumn(TimelineViewModel column)
     {
         if (!Columns.Remove(column))
         {

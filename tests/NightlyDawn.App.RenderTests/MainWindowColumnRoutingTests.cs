@@ -12,7 +12,7 @@ namespace NightlyDawn.App.RenderTests;
 
 /// <summary>
 /// Required test for plan §11.1: with two columns open, a row action fired from column B must land only on
-/// column B (its <see cref="TimelineColumnViewModel.Status"/> and <see cref="TimelineColumnViewModel.Notes"/>),
+/// column B (its <see cref="TimelineViewModel.Status"/> and <see cref="TimelineViewModel.Notes"/>),
 /// never on column A. Drives the real <see cref="MainWindow"/> (not a hand-rolled stand-in) so the test
 /// exercises <see cref="MainWindow.CreateColumn"/> itself -- the one place the per-column closure this guards
 /// against actually lives.
@@ -59,7 +59,7 @@ public sealed class MainWindowColumnRoutingTests
         Assert.Equal(notesCountABefore, columnA.Notes.Count);
     }
 
-    private static void SubscribeAndWaitForLoad(TimelineColumnViewModel column)
+    private static void SubscribeAndWaitForLoad(TimelineViewModel column)
     {
         column.Query = "from home";
         column.Subscribe();

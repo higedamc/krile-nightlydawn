@@ -98,7 +98,7 @@ public sealed class ComposeRenderTests
             Dispatcher.UIThread.RunJobs();
 
             // Workspace starts with one tab and one column (plan §11.4); that default column is the one
-            // this test's query goes to, same as the single TimelineColumnViewModel before L4.
+            // this test's query goes to, same as the single TimelineViewModel before L4.
             var timeline = ((WorkspaceViewModel)Window.DataContext!).Tabs[0].Columns[0];
             timeline.Query = "from home";
             timeline.Subscribe();

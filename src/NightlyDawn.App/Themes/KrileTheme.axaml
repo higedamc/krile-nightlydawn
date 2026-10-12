@@ -29,7 +29,7 @@
 
       <!-- Avalonia's Window template fills its background with this brush. -->
       <SolidColorBrush x:Key="ApplicationPageBackgroundThemeBrush" Color="#FF1C1822" />
-      <!-- The column's Border (TimelineColumnView.axaml) binds this one. -->
+      <!-- The column's Border (TimelineView.axaml) binds this one. -->
       <SolidColorBrush x:Key="SystemControlForegroundBaseLowBrush" Color="#FF3A3348" />
 
       <!-- Fluent derives button/selection/focus accents from these six. -->

@@ -21,7 +21,7 @@ namespace NightlyDawn.App.Timelines;
 /// from <see cref="ComposeViewModel"/> or <see cref="NoteRowActions"/> lands here the same way a relay-echoed
 /// note would, without waiting for that echo.</para>
 /// </summary>
-public sealed class TimelineColumnViewModel : INotifyPropertyChanged, IDisposable, IPublishedNoteSink
+public sealed class TimelineViewModel : INotifyPropertyChanged, IDisposable, IPublishedNoteSink
 {
     public const int DefaultMaxNotes = 500;
     public const string IdleStatus = "Enter a query and press Subscribe.";
@@ -49,7 +49,7 @@ public sealed class TimelineColumnViewModel : INotifyPropertyChanged, IDisposabl
     /// §18.2). Null (the default, and the designer/sample path) means every subscription is anonymous, same as
     /// before this leaf -- <see cref="IKeyStore"/> is the single source of truth for who is signed in; this class
     /// never mirrors that into a field of its own.</param>
-    public TimelineColumnViewModel(ITimelineSourceFactory factory, Action<Action> postToUi, int maxNotes = DefaultMaxNotes, IProfileStore? profileStore = null, Func<Note, NoteRowActions?>? actionsFactory = null, IKeyStore? keyStore = null)
+    public TimelineViewModel(ITimelineSourceFactory factory, Action<Action> postToUi, int maxNotes = DefaultMaxNotes, IProfileStore? profileStore = null, Func<Note, NoteRowActions?>? actionsFactory = null, IKeyStore? keyStore = null)
     {
         ArgumentNullException.ThrowIfNull(factory);
         ArgumentNullException.ThrowIfNull(postToUi);
@@ -109,7 +109,7 @@ public sealed class TimelineColumnViewModel : INotifyPropertyChanged, IDisposabl
 
     /// <summary>Set by whoever owns this column (its <see cref="TabViewModel"/>, right after
     /// <see cref="TabViewModel.AddColumn"/> builds it) so the column's own close button -- now part of
-    /// <see cref="NightlyDawn.App.Views.TimelineColumnView"/>'s header row (plan §11.6 / PR #30 review) --
+    /// <see cref="NightlyDawn.App.Views.TimelineView"/>'s header row (plan §11.6 / PR #30 review) --
     /// can ask to be removed without the column needing a reference back to its tab. Null until the owner
     /// sets it.</summary>
     public Action? RequestClose { get; set; }

@@ -204,7 +204,7 @@ public sealed class ComposeViewModel(Func<INotePublisher?> publisher, Func<IPubl
         }
         catch (Exception ex)
         {
-            // Type name only (plan §10.4-2), same convention as TimelineColumnViewModel's status line -- e.g.
+            // Type name only (plan §10.4-2), same convention as TimelineViewModel's status line -- e.g.
             // SignerUnavailableException before a key is unlocked, or RelayConnectionException on a socket
             // failure that never reaches an accept/reject outcome. Without this, Status is left stuck on the
             // "Posting…"/"Replying…"/"Quoting…" set above, every byte of Content survives (the catch below
