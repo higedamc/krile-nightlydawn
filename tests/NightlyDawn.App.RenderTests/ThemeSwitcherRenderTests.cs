@@ -193,7 +193,7 @@ public sealed class ThemeSwitcherRenderTests
             HeadlessWindowExtensions.SetRenderScaling(Window, 1.0);
             Dispatcher.UIThread.RunJobs();
 
-            var timeline = ((WorkspaceViewModel)Window.DataContext!).Tabs[0].Columns[0];
+            var timeline = ((WorkspaceViewModel)Window.DataContext!).Columns[0].Tabs[0];
             timeline.Query = "kind:1";
             timeline.Subscribe();
             Pump(() => !timeline.IsLoading, "the timeline stream never finished");

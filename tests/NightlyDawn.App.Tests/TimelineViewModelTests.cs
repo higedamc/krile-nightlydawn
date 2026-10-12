@@ -7,11 +7,11 @@ using Xunit;
 namespace NightlyDawn.App.Tests;
 
 /// <summary>Exercises the column without Avalonia: <c>postToUi</c> runs actions inline, so state is observable directly.</summary>
-public class TimelineColumnViewModelTests
+public class TimelineViewModelTests
 {
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(5);
 
-    private static TimelineColumnViewModel NewViewModel(ITimelineSourceFactory factory, int maxNotes = TimelineColumnViewModel.DefaultMaxNotes) =>
+    private static TimelineViewModel NewViewModel(ITimelineSourceFactory factory, int maxNotes = TimelineViewModel.DefaultMaxNotes) =>
         new(factory, postToUi: action => action(), maxNotes);
 
     [Fact]
@@ -169,7 +169,7 @@ public class TimelineColumnViewModelTests
         var factory = new FakeTimelineSourceFactory().Enqueue(source);
         var signer = new SignerDescriptor("ab".PadRight(64, '1'), SignerKind.Nip49Local);
         var keyStore = new FakeKeyStore { ActiveSigner = signer };
-        using var vm = new TimelineColumnViewModel(factory, postToUi: action => action(), keyStore: keyStore);
+        using var vm = new TimelineViewModel(factory, postToUi: action => action(), keyStore: keyStore);
         vm.Query = "from home";
 
         vm.Subscribe();
@@ -186,7 +186,7 @@ public class TimelineColumnViewModelTests
     }
 
     /// <summary>The L5j wart this leaf fixes (plan §18.5): being signed in routes <em>every</em> query through
-    /// <see cref="ITimelineSourceFactory.Create"/>, account-bound or not. <see cref="TimelineColumnViewModel.IsAccountBound"/>
+    /// <see cref="ITimelineSourceFactory.Create"/>, account-bound or not. <see cref="TimelineViewModel.IsAccountBound"/>
     /// must still answer false for a query like <c>from kind("1")</c> that never consumes the account, or
     /// <see cref="WorkspaceViewModel.NotifyAccountLocked"/> would wrongly resubscribe (and clear) a column that
     /// has nothing to do with the account that just locked.</summary>
@@ -197,7 +197,7 @@ public class TimelineColumnViewModelTests
         var factory = new FakeTimelineSourceFactory().Enqueue(source);
         var signer = new SignerDescriptor("ab".PadRight(64, '1'), SignerKind.Nip49Local);
         var keyStore = new FakeKeyStore { ActiveSigner = signer };
-        using var vm = new TimelineColumnViewModel(factory, postToUi: action => action(), keyStore: keyStore);
+        using var vm = new TimelineViewModel(factory, postToUi: action => action(), keyStore: keyStore);
         vm.Query = "from kind(\"1\")";
 
         vm.Subscribe();
@@ -217,7 +217,7 @@ public class TimelineColumnViewModelTests
         var source = new FakeTimelineSource();
         var factory = new FakeTimelineSourceFactory().Enqueue(source);
         var keyStore = new FakeKeyStore(); // No ActiveSigner set: GetActiveSignerAsync throws SignerUnavailableException, same as a locked/no-key store.
-        using var vm = new TimelineColumnViewModel(factory, postToUi: action => action(), keyStore: keyStore);
+        using var vm = new TimelineViewModel(factory, postToUi: action => action(), keyStore: keyStore);
         vm.Query = "from user(\"npub1...\")";
 
         vm.Subscribe();
@@ -229,12 +229,12 @@ public class TimelineColumnViewModelTests
     }
 
     /// <summary>The one real race the account lookup introduced (plan §18.2 item 2): a second
-    /// <see cref="TimelineColumnViewModel.Subscribe"/> must win over a first one whose account lookup is still
+    /// <see cref="TimelineViewModel.Subscribe"/> must win over a first one whose account lookup is still
     /// in flight when it finally resolves. <see cref="Fakes.FakeKeyStore.ActiveSignerDelay"/> is a one-shot, so
     /// generation 1's call consumes it (and blocks on it) while generation 2's call falls through to the
     /// already-set <see cref="Fakes.FakeKeyStore.ActiveSigner"/> and resolves immediately -- without the
     /// generation guard inside <c>Post</c>, generation 1's eventual, late success would overwrite generation 2's
-    /// <see cref="TimelineColumnViewModel.ActiveTimeline"/>/<see cref="TimelineColumnViewModel.IsAccountBound"/>
+    /// <see cref="TimelineViewModel.ActiveTimeline"/>/<see cref="TimelineViewModel.IsAccountBound"/>
     /// state, or call the factory a second time, even though the user had already moved on.</summary>
     [Fact]
     public async Task LateAccountResolution_FromASupersededSubscribe_IsDropped()
@@ -244,7 +244,7 @@ public class TimelineColumnViewModelTests
         var keyStore = new FakeKeyStore { ActiveSignerDelay = delay };
         var source = new FakeTimelineSource { IsAccountBound = true }; // `from home` is an account-bound source.
         var factory = new FakeTimelineSourceFactory().Enqueue(source); // Only one source queued: generation 1 must never reach the factory at all.
-        using var vm = new TimelineColumnViewModel(factory, postToUi: action => action(), keyStore: keyStore);
+        using var vm = new TimelineViewModel(factory, postToUi: action => action(), keyStore: keyStore);
 
         vm.Query = "from home";
         vm.Subscribe(); // Generation 1: suspends inside ResolveAccountAsync, waiting on `delay`.
@@ -342,7 +342,7 @@ public class TimelineColumnViewModelTests
 
         for (var i = 1; i <= 1000; i++)
         {
-            TimelineColumnViewModel.BufferCapped(buffer, TestNotes.Make(i, createdAt: i), maxNotes: 3);
+            TimelineViewModel.BufferCapped(buffer, TestNotes.Make(i, createdAt: i), maxNotes: 3);
             Assert.True(buffer.Count <= 3, $"buffer grew to {buffer.Count} after {i} notes, cap is 3");
         }
 
@@ -365,7 +365,7 @@ public class TimelineColumnViewModelTests
     }
 
     [Fact]
-    public void PropertyChanged_FiresForQueryStatusAndLoading()
+    public void PropertyChanged_FiresForQueryActiveTimelineAndStatus()
     {
         using var vm = NewViewModel(new FakeTimelineSourceFactory());
         var changed = new List<string?>();
@@ -375,7 +375,10 @@ public class TimelineColumnViewModelTests
         vm.Query = "from home"; // Unchanged value: no event.
         vm.Subscribe(); // Factory has no source queued -> reported as a failure through Status.
 
-        Assert.Equal(["Query", "Status"], changed);
+        // ActiveTimeline fires right after Query: Subscribe() sets it unconditionally, before StartAsync's
+        // account lookup and factory call even run (plan §24.6/L4b-3 -- this used to be a silent auto-property,
+        // which is why every tab header stayed stuck on its FallbackValue).
+        Assert.Equal(["Query", "ActiveTimeline", "Status"], changed);
     }
 
     private static async Task WaitUntil(Func<bool> condition, string what)

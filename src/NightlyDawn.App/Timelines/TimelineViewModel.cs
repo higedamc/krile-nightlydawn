@@ -8,7 +8,8 @@ using NightlyDawn.Core;
 namespace NightlyDawn.App.Timelines;
 
 /// <summary>
-/// One timeline column: a raw KQL query, a bounded newest-first list of <see cref="NoteRow"/>s, and the
+/// One tab's timeline content (one column before plan §21.2's inversion): a raw KQL query, a bounded
+/// newest-first list of <see cref="NoteRow"/>s, and the
 /// loading state. Subscribing resolves the active account from <see cref="IKeyStore"/> (if one was given and
 /// a signer is active), then asks the <see cref="ITimelineSourceFactory"/> for an account-bound source via
 /// <see cref="ITimelineSourceFactory.Create"/>, or an anonymous (read-only, no signer) one via
@@ -21,7 +22,7 @@ namespace NightlyDawn.App.Timelines;
 /// from <see cref="ComposeViewModel"/> or <see cref="NoteRowActions"/> lands here the same way a relay-echoed
 /// note would, without waiting for that echo.</para>
 /// </summary>
-public sealed class TimelineColumnViewModel : INotifyPropertyChanged, IDisposable, IPublishedNoteSink
+public sealed class TimelineViewModel : INotifyPropertyChanged, IDisposable, IPublishedNoteSink
 {
     public const int DefaultMaxNotes = 500;
     public const string IdleStatus = "Enter a query and press Subscribe.";
@@ -40,6 +41,7 @@ public sealed class TimelineColumnViewModel : INotifyPropertyChanged, IDisposabl
     private string _status = IdleStatus;
     private bool _isLoading;
     private bool _disposed;
+    private Timeline? _activeTimeline;
 
     /// <param name="profileStore">Resolves author display names (plan §8). Null skips profile lookups entirely --
     /// rows show the pubkey-prefix fallback, same as before this leaf.</param>
@@ -49,7 +51,7 @@ public sealed class TimelineColumnViewModel : INotifyPropertyChanged, IDisposabl
     /// §18.2). Null (the default, and the designer/sample path) means every subscription is anonymous, same as
     /// before this leaf -- <see cref="IKeyStore"/> is the single source of truth for who is signed in; this class
     /// never mirrors that into a field of its own.</param>
-    public TimelineColumnViewModel(ITimelineSourceFactory factory, Action<Action> postToUi, int maxNotes = DefaultMaxNotes, IProfileStore? profileStore = null, Func<Note, NoteRowActions?>? actionsFactory = null, IKeyStore? keyStore = null)
+    public TimelineViewModel(ITimelineSourceFactory factory, Action<Action> postToUi, int maxNotes = DefaultMaxNotes, IProfileStore? profileStore = null, Func<Note, NoteRowActions?>? actionsFactory = null, IKeyStore? keyStore = null)
     {
         ArgumentNullException.ThrowIfNull(factory);
         ArgumentNullException.ThrowIfNull(postToUi);
@@ -86,7 +88,11 @@ public sealed class TimelineColumnViewModel : INotifyPropertyChanged, IDisposabl
     }
 
     /// <summary>The <see cref="Timeline"/> handed to the factory for the current subscription, or null before the first one.</summary>
-    public Timeline? ActiveTimeline { get; private set; }
+    public Timeline? ActiveTimeline
+    {
+        get => _activeTimeline;
+        private set => SetField(ref _activeTimeline, value);
+    }
 
     /// <summary>True when the column's current <see cref="ITimelineSource"/> actually consumes the signed-in
     /// account's identity (<see cref="ITimelineSource.IsAccountBound"/>) -- not merely whether one was resolved
@@ -107,10 +113,10 @@ public sealed class TimelineColumnViewModel : INotifyPropertyChanged, IDisposabl
     /// Cleared by the next <see cref="Subscribe"/> attempt, whatever its outcome.</summary>
     public bool NeedsAccountRetry { get; private set; }
 
-    /// <summary>Set by whoever owns this column (its <see cref="TabViewModel"/>, right after
-    /// <see cref="TabViewModel.AddColumn"/> builds it) so the column's own close button -- now part of
-    /// <see cref="NightlyDawn.App.Views.TimelineColumnView"/>'s header row (plan §11.6 / PR #30 review) --
-    /// can ask to be removed without the column needing a reference back to its tab. Null until the owner
+    /// <summary>Set by whoever owns this tab (its <see cref="ColumnViewModel"/>, right after
+    /// <see cref="ColumnViewModel.AddTab"/> builds it) so the tab's own close button -- part of
+    /// <see cref="NightlyDawn.App.Views.TimelineView"/>'s header row (plan §11.6 / PR #30 review) --
+    /// can ask to be removed without this class needing a reference back to its column. Null until the owner
     /// sets it.</summary>
     public Action? RequestClose { get; set; }
 

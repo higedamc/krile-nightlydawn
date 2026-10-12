@@ -14,7 +14,7 @@ internal sealed class FakeTimelineSource : ITimelineSource
     /// <summary>When true the stream keeps reading after cancellation, like a source that ignores its token. Used to prove the view model drops late updates itself.</summary>
     public bool IgnoreCancellation { get; init; }
 
-    /// <summary>What <see cref="TimelineColumnViewModel.IsAccountBound"/> should read off this source --
+    /// <summary>What <see cref="TimelineViewModel.IsAccountBound"/> should read off this source --
     /// defaults to false (most queries never need an account), set to true by a test that is specifically
     /// scripting an account-bound query like <c>from home</c>/<c>from mentions</c> (plan §18.5).</summary>
     public bool IsAccountBound { get; init; }

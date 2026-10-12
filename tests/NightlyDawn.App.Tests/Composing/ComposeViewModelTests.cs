@@ -6,7 +6,7 @@ using Xunit;
 namespace NightlyDawn.App.Tests.Composing;
 
 /// <summary>Exercises the compose box without Avalonia: <c>postToUi</c> runs actions inline (same pattern as
-/// <c>TimelineColumnViewModelTests</c>), so state is observable directly after each await.</summary>
+/// <c>TimelineViewModelTests</c>), so state is observable directly after each await.</summary>
 public class ComposeViewModelTests
 {
     private static ComposeViewModel NewViewModel(FakeNotePublisher publisher, FakePublishedNoteSink sink) =>

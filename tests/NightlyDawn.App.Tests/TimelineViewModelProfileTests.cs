@@ -9,12 +9,12 @@ namespace NightlyDawn.App.Tests;
 /// <summary>Plan §8.1: a row's author label comes from whatever is cached when the row is built, live notes
 /// wait on their author's prefetch before they are inserted, and a profile-lookup failure never stops the
 /// note stream. Each with the negative control that proves it.</summary>
-public class TimelineColumnViewModelProfileTests
+public class TimelineViewModelProfileTests
 {
     private const string Author = TestNotes.Author;
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(5);
 
-    private static TimelineColumnViewModel NewViewModel(ITimelineSourceFactory factory, IProfileStore? profileStore) =>
+    private static TimelineViewModel NewViewModel(ITimelineSourceFactory factory, IProfileStore? profileStore) =>
         new(factory, postToUi: action => action(), profileStore: profileStore);
 
     [Fact]
