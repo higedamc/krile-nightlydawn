@@ -41,6 +41,7 @@ public sealed class TimelineViewModel : INotifyPropertyChanged, IDisposable, IPu
     private string _status = IdleStatus;
     private bool _isLoading;
     private bool _disposed;
+    private Timeline? _activeTimeline;
 
     /// <param name="profileStore">Resolves author display names (plan §8). Null skips profile lookups entirely --
     /// rows show the pubkey-prefix fallback, same as before this leaf.</param>
@@ -87,7 +88,11 @@ public sealed class TimelineViewModel : INotifyPropertyChanged, IDisposable, IPu
     }
 
     /// <summary>The <see cref="Timeline"/> handed to the factory for the current subscription, or null before the first one.</summary>
-    public Timeline? ActiveTimeline { get; private set; }
+    public Timeline? ActiveTimeline
+    {
+        get => _activeTimeline;
+        private set => SetField(ref _activeTimeline, value);
+    }
 
     /// <summary>True when the column's current <see cref="ITimelineSource"/> actually consumes the signed-in
     /// account's identity (<see cref="ITimelineSource.IsAccountBound"/>) -- not merely whether one was resolved

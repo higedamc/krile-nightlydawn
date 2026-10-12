@@ -44,7 +44,7 @@
                PlaceholderText="from home   |   from user(npub1...)   |   from search(&quot;nostr&quot;)" />
       <Button x:Name="SubscribeButton" Grid.Column="1" Margin="8,0,0,0" Content="Subscribe" IsDefault="True"
               Click="OnSubscribeClick" />
-      <Button x:Name="CloseTabButton" Grid.Column="2" Margin="4,0,0,0" Content="×" Click="OnCloseSelectedTabClick" />
+      <Button x:Name="CloseSelectedTabButton" Grid.Column="2" Margin="4,0,0,0" Content="×" Click="OnCloseSelectedTabClick" />
     </Grid>
   </DockPanel>
 </UserControl>

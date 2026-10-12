@@ -365,7 +365,7 @@ public class TimelineViewModelTests
     }
 
     [Fact]
-    public void PropertyChanged_FiresForQueryStatusAndLoading()
+    public void PropertyChanged_FiresForQueryActiveTimelineAndStatus()
     {
         using var vm = NewViewModel(new FakeTimelineSourceFactory());
         var changed = new List<string?>();
@@ -375,7 +375,10 @@ public class TimelineViewModelTests
         vm.Query = "from home"; // Unchanged value: no event.
         vm.Subscribe(); // Factory has no source queued -> reported as a failure through Status.
 
-        Assert.Equal(["Query", "Status"], changed);
+        // ActiveTimeline fires right after Query: Subscribe() sets it unconditionally, before StartAsync's
+        // account lookup and factory call even run (plan §24.6/L4b-3 -- this used to be a silent auto-property,
+        // which is why every tab header stayed stuck on its FallbackValue).
+        Assert.Equal(["Query", "ActiveTimeline", "Status"], changed);
     }
 
     private static async Task WaitUntil(Func<bool> condition, string what)
