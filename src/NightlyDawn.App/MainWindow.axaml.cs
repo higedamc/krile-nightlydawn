@@ -43,10 +43,10 @@ public sealed partial class MainWindow : Window
             postToUi: action => Dispatcher.UIThread.Post(action));
         this.FindControl<ComposeBoxView>("ComposeBox")!.DataContext = _compose;
 
-        // The workspace starts with one tab and one column (plan §11.4); every further tab/column the user
-        // opens is built through CreateColumn below, the single place a column is ever constructed (plan
-        // §11.1).
-        _workspace = new WorkspaceViewModel(CreateColumn);
+        // The workspace starts with one column and one tab (plan §11.4); every further column/tab the user
+        // opens is built through CreateTab below, the single place a tab is ever constructed (plan §11.1,
+        // inverted for §21.2 / L4b).
+        _workspace = new WorkspaceViewModel(CreateTab);
         DataContext = _workspace; // WorkspaceView inherits this, same as TimelineView did before 0e-b/L4.
 
         // Theme switch (L8): the only mutable state it needs is the running Application's variant, so it is
@@ -68,26 +68,27 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// The one place a <see cref="TimelineViewModel"/> is built (plan §11.1): the factory and profile
-    /// store come from the composition point, never from <c>NightlyDawn.Nostr</c> directly (B9).
-    /// <paramref name="column"/>'s <c>actionsFactory</c> closes over the column this call itself produces, not
-    /// a field shared across columns -- the required test for this leaf is that column B's row actions report
-    /// only to column B, and a factory that closed over one shared field (like the pre-L4 single-column
-    /// closure did) would make every column's rows report to whichever column that field pointed at last.
+    /// The one place a <see cref="TimelineViewModel"/> is built (plan §11.1, now one tab's content rather than
+    /// one column's after §21.2's inversion): the factory and profile store come from the composition point,
+    /// never from <c>NightlyDawn.Nostr</c> directly (B9). <paramref name="tab"/>'s <c>actionsFactory</c> closes
+    /// over the tab this call itself produces, not a field shared across tabs -- the required test for L4 was
+    /// that column B's row actions report only to column B; the same closure now guards tab B instead (plan
+    /// §21.2: each physical column still gets its own factory call, one per default tab plus every
+    /// <see cref="ColumnViewModel.AddTab"/>).
     /// </summary>
-    private TimelineViewModel CreateColumn()
+    private TimelineViewModel CreateTab()
     {
-        TimelineViewModel? column = null;
-        // column is read here only through this closure, invoked lazily (plan §10.1-2's row-build time, well
+        TimelineViewModel? tab = null;
+        // tab is read here only through this closure, invoked lazily (plan §10.1-2's row-build time, well
         // after this method returns) -- the nullable analyzer cannot see that, since it only tracks flow up
         // to this statement, not when the delegate actually runs.
-        column = new TimelineViewModel(
+        tab = new TimelineViewModel(
             AppServices.TimelineSourceFactory,
             postToUi: action => Dispatcher.UIThread.Post(action),
             profileStore: AppServices.ProfileStore,
-            actionsFactory: note => new NoteRowActions(note, () => AppServices.NotePublisher, _compose, column!, column!.ReportStatus),
+            actionsFactory: note => new NoteRowActions(note, () => AppServices.NotePublisher, _compose, tab!, tab!.ReportStatus),
             keyStore: AppServices.KeyStore);
-        return column;
+        return tab;
     }
 
     /// <summary>

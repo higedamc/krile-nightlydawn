@@ -8,7 +8,8 @@ using NightlyDawn.Core;
 namespace NightlyDawn.App.Timelines;
 
 /// <summary>
-/// One timeline column: a raw KQL query, a bounded newest-first list of <see cref="NoteRow"/>s, and the
+/// One tab's timeline content (one column before plan §21.2's inversion): a raw KQL query, a bounded
+/// newest-first list of <see cref="NoteRow"/>s, and the
 /// loading state. Subscribing resolves the active account from <see cref="IKeyStore"/> (if one was given and
 /// a signer is active), then asks the <see cref="ITimelineSourceFactory"/> for an account-bound source via
 /// <see cref="ITimelineSourceFactory.Create"/>, or an anonymous (read-only, no signer) one via
@@ -107,10 +108,10 @@ public sealed class TimelineViewModel : INotifyPropertyChanged, IDisposable, IPu
     /// Cleared by the next <see cref="Subscribe"/> attempt, whatever its outcome.</summary>
     public bool NeedsAccountRetry { get; private set; }
 
-    /// <summary>Set by whoever owns this column (its <see cref="TabViewModel"/>, right after
-    /// <see cref="TabViewModel.AddColumn"/> builds it) so the column's own close button -- now part of
+    /// <summary>Set by whoever owns this tab (its <see cref="ColumnViewModel"/>, right after
+    /// <see cref="ColumnViewModel.AddTab"/> builds it) so the tab's own close button -- part of
     /// <see cref="NightlyDawn.App.Views.TimelineView"/>'s header row (plan §11.6 / PR #30 review) --
-    /// can ask to be removed without the column needing a reference back to its tab. Null until the owner
+    /// can ask to be removed without this class needing a reference back to its column. Null until the owner
     /// sets it.</summary>
     public Action? RequestClose { get; set; }
 

@@ -2,9 +2,11 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:tl="using:NightlyDawn.App.Timelines"
              x:Class="NightlyDawn.App.Views.TabStripView"
-             x:DataType="tl:WorkspaceViewModel">
-  <!-- Lives in MainWindow's header row, beside the title (plan §11.6 / PR #30 review): a horizontal sibling
-       costs 0 vertical DIP, unlike the row this used to occupy inside WorkspaceView. -->
+             x:DataType="tl:ColumnViewModel">
+  <!-- Moved from MainWindow's header into each column (plan §21.2 / L4b): the fork nests Tabs inside Columns
+       (StarryEyes MainArea.xaml ColumnTemplate:96), so the strip now belongs to the column it switches
+       between, not to the window. One instance per column, inside WorkspaceView's per-column template;
+       each gets its own NameScope, same as QueryBox/SubscribeButton/TimelineList already do per tab. -->
   <DockPanel>
     <Button x:Name="AddTabButton" DockPanel.Dock="Right" Content="+ Tab" Click="OnAddTabClick" />
 
@@ -15,11 +17,15 @@
         </ItemsPanelTemplate>
       </ItemsControl.ItemsPanel>
       <ItemsControl.ItemTemplate>
-        <DataTemplate x:DataType="tl:TabViewModel">
+        <DataTemplate x:DataType="tl:TimelineViewModel">
           <Border Padding="8,4" CornerRadius="4" BorderThickness="1"
                   BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}">
             <StackPanel Orientation="Horizontal" Spacing="4">
-              <Button x:Name="TabHeaderButton" Content="{Binding Title}" Click="OnSelectTabClick" Tag="{Binding}" />
+              <!-- No persisted/user-set title yet (plan §21.2's "やらないこと": that is step 4's "クエリは
+                   タブの設定へ"); shows the live query each tab was opened with, falling back before the
+                   first Subscribe. -->
+              <Button x:Name="TabHeaderButton" Content="{Binding ActiveTimeline.Title, FallbackValue='(new tab)'}"
+                      Click="OnSelectTabClick" Tag="{Binding}" />
               <Button x:Name="CloseTabButton" Content="×" Click="OnCloseTabClick" Tag="{Binding}" />
             </StackPanel>
           </Border>

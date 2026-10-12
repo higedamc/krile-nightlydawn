@@ -32,11 +32,10 @@ public sealed class MainWindowColumnRoutingTests
     {
         using var session = new RoutingSession();
         var workspace = (WorkspaceViewModel)session.Window.DataContext!;
-        var tab = workspace.Tabs[0];
 
-        var columnA = tab.Columns[0];
+        var columnA = workspace.Columns[0].Tabs[0];
         SubscribeAndWaitForLoad(columnA);
-        var columnB = tab.AddColumn();
+        var columnB = workspace.AddColumn().Tabs[0];
         SubscribeAndWaitForLoad(columnB);
 
         var statusABefore = columnA.Status;

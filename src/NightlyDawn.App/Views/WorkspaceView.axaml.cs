@@ -13,5 +13,5 @@ public sealed partial class WorkspaceView : UserControl
     // WorkspaceViewModel), not set here -- same pattern TimelineView used before this leaf.
     private WorkspaceViewModel? ViewModel => DataContext as WorkspaceViewModel;
 
-    private void OnAddColumnClick(object? sender, RoutedEventArgs e) => ViewModel?.SelectedTab?.AddColumn();
+    private void OnAddColumnClick(object? sender, RoutedEventArgs e) => ViewModel?.AddColumn();
 }

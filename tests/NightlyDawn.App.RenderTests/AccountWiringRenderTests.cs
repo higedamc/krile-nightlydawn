@@ -166,12 +166,12 @@ public sealed class AccountWiringRenderTests
             Pump(() => FindByName<Control>(Window, "GenerateBox")?.IsVisible == true,
                 "the Keys panel never reached the NoKey/Generate state");
 
-            Column = ((WorkspaceViewModel)Window.DataContext!).Tabs[0].Columns[0];
+            Column = ((WorkspaceViewModel)Window.DataContext!).Columns[0].Tabs[0];
         }
 
-        /// <summary>A second column in the same tab/workspace -- for a test that needs one column whose query
-        /// never binds the account alongside one that does, both reacting to the same Lock.</summary>
-        public TimelineViewModel AddColumn() => ((WorkspaceViewModel)Window.DataContext!).Tabs[0].AddColumn();
+        /// <summary>A second, independent column in the same workspace -- for a test that needs one column
+        /// whose query never binds the account alongside one that does, both reacting to the same Lock.</summary>
+        public TimelineViewModel AddColumn() => ((WorkspaceViewModel)Window.DataContext!).AddColumn().Tabs[0];
 
         /// <summary>Drives the real Generate button -- the passphrase text boxes and the click -- the same way
         /// a user does, and waits for the panel to actually reach Unlocked before returning.</summary>
