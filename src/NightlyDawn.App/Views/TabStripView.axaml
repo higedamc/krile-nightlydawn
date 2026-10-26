@@ -87,10 +87,12 @@
 
                The three full examples live in ToolTip.Tip, not PlaceholderText (L10 v2, Lead's §48 review):
                inside the settings Popup, QueryBox's available width is unconstrained, so the `*` column grows
-               to fit however long PlaceholderText's rendered ink is — at the fork's original 146-character,
-               three-example hint that pushed the settings panel to 1138 DIP wide, enough to push
-               SubscribeButton outside a 1100 DIP window (measured: 1280 DIP window had 142 DIP of margin left,
-               a 10% longer hint lost it too). A ToolTip does not participate in its owner's measure pass, so
+               to fit however long PlaceholderText's rendered ink is — at L10 v1's 146-character,
+               three-example hint (not the fork's original, which is 62 characters and never grows the panel
+               past master's 558 DIP) that pushed the settings panel to 1138 DIP wide, enough that at 1100 DIP
+               the headless input path's coordinates no longer agree with TranslatePoint's for SubscribeButton,
+               even though its centre stays inside the window (measured: 1280 DIP window had 142 DIP of margin
+               left, a 10% longer hint lost it too). A ToolTip does not participate in its owner's measure pass, so
                it cannot move the panel's width; PlaceholderText now carries only the one short example that
                used to fit before L10 (MinWidth 420 unaffected). -->
           <TextBox x:Name="QueryBox" Grid.Column="0" MinWidth="420"

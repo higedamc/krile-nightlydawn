@@ -17,13 +17,13 @@ namespace NightlyDawn.App.RenderTests;
 /// <summary>
 /// Plan §48-49 / L10 v2 (Lead's review of #49): the hint's own length used to decide the settings panel's
 /// width, because <c>QueryBox</c> sits inside a <see cref="Popup"/> where the available width is unconstrained,
-/// so the <c>*</c> column grows to fit <c>PlaceholderText</c>'s rendered ink. At the fork's original
-/// 146-character, three-example hint that pushed the panel to 1138 DIP wide -- enough that a 1280 DIP window
-/// left only 142 DIP of margin, and a 1100 DIP window pushed <c>SubscribeButton</c> fully outside the window's
-/// own bounds. Lead's probe found that past that point, the headless input path's coordinates and
-/// <c>TranslatePoint</c>'s coordinates disagree: clicking the button's own reported centre no longer sets
-/// <c>IsPointerOver</c>, so the click never reaches <c>OnSubscribeClick</c> at all -- not a visual overflow, a
-/// silently dead button.
+/// so the <c>*</c> column grows to fit <c>PlaceholderText</c>'s rendered ink. L10 v1's 146-character,
+/// three-example hint pushed the panel to 1138 DIP wide -- enough that a 1280 DIP window left only 142 DIP
+/// of margin, and a 1100 DIP window clamped the panel to 1100 DIP. The fork's original hint is 62 characters
+/// and never grows the panel past master's 558 DIP. Lead's probe found that past 1100, the headless input
+/// path's coordinates and <c>TranslatePoint</c>'s coordinates disagree even though <c>SubscribeButton</c>'s
+/// own centre stays inside the window: clicking that centre no longer sets <c>IsPointerOver</c>, so the
+/// click never reaches <c>OnSubscribeClick</c> at all -- not a visual overflow, a silently dead button.
 ///
 /// <para>This is the receiving test for L10 v2's fix (<c>TabStripView.axaml</c>'s <c>PlaceholderText</c> now
 /// carries one short example; the full three live in <c>ToolTip.Tip</c>, which does not participate in its
@@ -37,7 +37,7 @@ namespace NightlyDawn.App.RenderTests;
 /// margin even with the old hint).</para>
 ///
 /// <para>Mutation (a), run by hand and reverted after confirming red (<c>cmp</c> confirmed byte-identical
-/// restore): swapping the fix's short <c>PlaceholderText</c> back for the fork's original 146-character,
+/// restore): swapping the fix's short <c>PlaceholderText</c> back for L10 v1's 146-character,
 /// three-example string turns <see cref="SubscribeButton_IsReachable"/> red at window width 1100 --
 /// <c>SubscribeButton.IsPointerOver</c> stays <c>false</c> after the <c>MouseMove</c>, and the subsequent
 /// click never starts the subscription (<c>tab.Notes</c> stays empty). Width 1280 still passed under the same
