@@ -307,6 +307,32 @@ public class FilterCompilerCompileTests
     }
 
     [Fact]
+    public void Evaluate_TextContains_IsCaseInsensitive()
+    {
+        // plan §42 F1: KeywordMatcher.IsMatch (the live search box) compares OrdinalIgnoreCase. A pinned tab
+        // (SearchFlipViewModel.PinToTab, L7b) compiles the same positive word to `text contains "..."`, so this
+        // must accept the same rows the live box already showed, or pinning silently narrows the result set.
+        var ast = _sut.Parse("from search(\"\") where text contains \"bitcoin\"");
+        var compiled = _sut.Compile(ast);
+
+        Assert.True(compiled.LocalPredicate!(TestNotes.Make(content: "Bitcoin is fine")));
+        Assert.True(compiled.LocalPredicate(TestNotes.Make(content: "bitcoin lowercase")));
+        Assert.False(compiled.LocalPredicate(TestNotes.Make(content: "no match here")));
+    }
+
+    [Fact]
+    public void Evaluate_TextEquals_StaysOrdinal()
+    {
+        // Only `text contains` was widened to OrdinalIgnoreCase (plan §42 F1) -- the other operators on `text`,
+        // and CompareString's other caller (user.npub), are untouched, so this pins the boundary of the fix.
+        var ast = _sut.Parse("from search(\"\") where text = \"Bitcoin\"");
+        var compiled = _sut.Compile(ast);
+
+        Assert.True(compiled.LocalPredicate!(TestNotes.Make(content: "Bitcoin")));
+        Assert.False(compiled.LocalPredicate(TestNotes.Make(content: "bitcoin")));
+    }
+
+    [Fact]
     public void Evaluate_NumericField_RejectsContains()
     {
         // plan §7.6 item ①: same as the boolean case above — fails at Compile, not on the first note.

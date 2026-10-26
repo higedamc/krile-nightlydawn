@@ -69,6 +69,72 @@ public class SearchFlipViewModelPinTests
     }
 
     [Fact]
+    public async Task InCurrentTabMode_PinnedSet_MatchesTheLiveSet_RegardlessOfCasing()
+    {
+        // plan §42 F1: KeywordMatcher.IsMatch (what the live box showed) and the compiled `text contains` the
+        // pinned tab's KQL carries must agree on a mixed-case note, or pinning silently drops a row the person
+        // was looking at.
+        var factory = new FakeTimelineSourceFactory();
+        var originalSource = new FakeTimelineSource();
+        factory.Enqueue(originalSource);
+        var column = new ColumnViewModel(() => new TimelineViewModel(factory, action => action()));
+        var search = new SearchFlipViewModel(() => column.SelectedTab, () => column, Compiler);
+
+        var original = column.AddTab();
+        original.Query = "from kind(\"1\") where ()";
+        original.Subscribe();
+        originalSource.Push(new NoteArrived(TestNotes.Make(1, 100, content: "Bitcoin is fine")));
+        originalSource.Push(new NoteArrived(TestNotes.Make(2, 200, content: "bitcoin lowercase")));
+        originalSource.Push(new InitialLoadComplete());
+        await WaitUntil(() => !original.IsLoading, "original tab finished its initial load");
+
+        search.Open();
+        search.Text = "bitcoin";
+        Assert.Equal(["bitcoin lowercase", "Bitcoin is fine"], search.SearchResult!.Notes.Select(n => n.DisplayContent));
+
+        factory.Enqueue(new FakeTimelineSource());
+        search.PinToTab();
+
+        Assert.Null(search.PinError);
+        var pinned = column.Tabs[1];
+        var compiled = Compiler.Compile(Compiler.Parse(pinned.Query));
+        Assert.True(Accepts(compiled, TestNotes.Make(3, 300, content: "Bitcoin is fine")));
+        Assert.True(Accepts(compiled, TestNotes.Make(4, 400, content: "bitcoin lowercase")));
+    }
+
+    [Fact]
+    public void InCurrentTabMode_WhenTheCombinedQueryWouldExceedMaxQueryLength_SetsPinError_AndDoesNotAddTheTab()
+    {
+        // plan §42 F2: AppStateShape rejects any tab.Query over AppState.MaxQueryLength on save (AppStateShape.cs
+        // §34/L9-2), and once a tab holds an unsaveable query every later layout save fails, silently, for the
+        // rest of the session. The guard must run before AddTab -- adding the tab first and only then discovering
+        // the query is too long would leave that broken tab behind.
+        var factory = new FakeTimelineSourceFactory();
+        var originalSource = new FakeTimelineSource();
+        factory.Enqueue(originalSource);
+        var column = new ColumnViewModel(() => new TimelineViewModel(factory, action => action()));
+        var search = new SearchFlipViewModel(() => column.SelectedTab, () => column, Compiler);
+
+        var original = column.AddTab();
+        // Pads the original tab's own query right up against the 4096 cap the query box itself enforces, so the
+        // keyword expression PinToTab ANDs onto it pushes the combined KQL over the limit.
+        var padding = new string('a', AppState.MaxQueryLength - "from kind(\"1\") where (text contains \"\")".Length - 1);
+        original.Query = $"from kind(\"1\") where (text contains \"{padding}\")";
+        original.Subscribe();
+
+        search.Open();
+        search.Text = "alpha";
+        Assert.NotNull(search.SearchResult);
+
+        search.PinToTab();
+
+        Assert.NotNull(search.PinError);
+        Assert.Contains("character limit", search.PinError);
+        Assert.Single(column.Tabs); // Nothing was added: the length is checked before AddTab.
+        Assert.True(search.IsOpen); // A failed pin must not also close the panel out from under the person.
+    }
+
+    [Fact]
     public async Task InCurrentTabMode_WhenTheOriginalTabHasNoWhereClause_PinsTheKeywordExpressionAlone()
     {
         var factory = new FakeTimelineSourceFactory();

@@ -427,6 +427,16 @@ public sealed class SearchFlipViewModel : INotifyPropertyChanged, IDisposable
             return;
         }
 
+        if (kql.Length > AppState.MaxQueryLength)
+        {
+            // Checked before AddTab, not after: AppStateShape.cs rejects any tab.Query over MaxQueryLength on
+            // save, and once a tab exists with an unsaveable query every later layout save fails too (plan §42
+            // F2, the fork's own L9-2 failure mode). Pinning the original tab's query onto a keyword expression
+            // can cross the 4096-character bound the search box and query box each separately stay under.
+            PinError = $"The combined query would be {kql.Length} characters, over the saved layout's {AppState.MaxQueryLength}-character limit -- shorten the current tab's query or the search text before pinning.";
+            return;
+        }
+
         var tab = column.AddTab();
         tab.Query = kql;
         tab.Subscribe();
@@ -456,7 +466,11 @@ public sealed class SearchFlipViewModel : INotifyPropertyChanged, IDisposable
 
         var originalAst = _compiler.Parse(tabQuery);
         var keywordNode = KeywordMatcher.Parse(committedText).ToFilterNode();
-        var combinedWhere = originalAst.Where is null ? keywordNode : new FilterAnd(originalAst.Where, keywordNode);
+        // Keyword first, original tab query second: AND is commutative and PushDown walks both sides, so this
+        // changes nothing about which notes match -- only the label (ActiveTimeline.Title is the written KQL)
+        // shows the word the person typed before the tab it came from, instead of truncating it off the end
+        // of a long original query (plan §42 N1).
+        var combinedWhere = originalAst.Where is null ? keywordNode : new FilterAnd(keywordNode, originalAst.Where);
         return KqlWriter.Write(new FilterAst(originalAst.Source, combinedWhere));
     }
 
