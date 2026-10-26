@@ -8,12 +8,15 @@ using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using NightlyDawn.App.Composing;
 using NightlyDawn.App.Keys;
 using NightlyDawn.App.Persistence;
+using NightlyDawn.App.Search;
 using NightlyDawn.App.Theming;
 using NightlyDawn.App.Timelines;
 using NightlyDawn.App.Views;
+using NightlyDawn.Filters;
 
 namespace NightlyDawn.App;
 
@@ -26,6 +29,9 @@ public sealed partial class MainWindow : Window
     private readonly WorkspaceViewModel _workspace;
     private readonly KeyPanelViewModel _keys;
     private readonly ThemeSwitcherViewModel _theme;
+    private readonly SearchFlipViewModel _search;
+    private readonly SearchBoxView _searchBox;
+    private readonly SearchFlipView _searchFlip;
     private readonly LayoutPersistence? _persistence;
     private KeyPanelState _lastKeyState = KeyPanelState.Unavailable;
 
@@ -65,6 +71,18 @@ public sealed partial class MainWindow : Window
             theme => ThemeController.Apply(Application.Current!, theme));
         this.FindControl<ThemeSwitcherView>("ThemeSwitcher")!.Attach(_theme);
 
+        // Search flip (L7a, plan §37): the fork's search box opens a panel over the main area. The view model is
+        // Avalonia-free and reaches the workspace only through the delegate (the tab a search runs over is read at
+        // commit time, like the fork's TabManager.CurrentFocusTab). The ? query mode compiles through the same
+        // FilterCompiler the relay layer uses for tab queries -- Filters is a project this assembly already
+        // references; the App stays clear of NightlyDawn.Nostr and NightlyDawn.Keys (B9, ArchitectureTests).
+        _search = new SearchFlipViewModel(() => _workspace.SelectedColumn?.SelectedTab, new FilterCompiler());
+        _search.FocusRequested += OnSearchFocusRequested;
+        _searchBox = this.FindControl<SearchBoxView>("SearchBoxHost")!;
+        _searchBox.Attach(_search);
+        _searchFlip = this.FindControl<SearchFlipView>("SearchFlip")!;
+        _searchFlip.Attach(_search);
+
         // Layout persistence (L9, plan §32): restore here, in the constructor, before the window is ever shown
         // and before LayoutPersistence starts listening -- so the default layout built two statements up is
         // never on screen long enough to be edited, and never saved (plan §32.7's two ordering rules;
@@ -99,7 +117,45 @@ public sealed partial class MainWindow : Window
     {
         _persistence?.FlushOnClose(CloseFlushTimeout);
         _persistence?.Dispose();
+        _search.Dispose();
         _workspace.Dispose();
+    }
+
+    /// <summary>Resolves <see cref="SearchFlipViewModel.FocusRequested"/>'s targets to controls (plan §37.2 items 6
+    /// and 8): the box, the result list, or the selected tab's own <c>TimelineList</c> -- found by DataContext
+    /// because every tab's <c>TimelineView</c> names its list the same way, and the one to return to is the one
+    /// showing the selected tab. Focus lands on the list's selected (else first) row, since the list itself is
+    /// not focusable (<see cref="ListBoxFocus"/>); the selection is not changed. A target that cannot be focused
+    /// (no tab selected, list not realized) is left alone rather than guessed at.</summary>
+    private void OnSearchFocusRequested(SearchFocusTarget target)
+    {
+        switch (target)
+        {
+            case SearchFocusTarget.SearchBox:
+                _searchBox.FocusInput();
+                break;
+            case SearchFocusTarget.Results:
+                _searchFlip.FocusResults();
+                break;
+            case SearchFocusTarget.Timeline:
+                var tab = _workspace.SelectedColumn?.SelectedTab;
+                if (tab is null)
+                {
+                    return;
+                }
+
+                var list = this.GetVisualDescendants()
+                    .OfType<ListBox>()
+                    .FirstOrDefault(l => l.Name == "TimelineList" && ReferenceEquals(l.DataContext, tab));
+                if (list is not null)
+                {
+                    ListBoxFocus.FocusRow(list, list.SelectedIndex);
+                }
+
+                break;
+            default:
+                break;
+        }
     }
 
     /// <summary>

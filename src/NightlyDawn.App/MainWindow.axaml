@@ -16,6 +16,10 @@
          NightlyDawn" — that identity did not need an in-window copy. -->
     <DockPanel DockPanel.Dock="Top">
       <views:ThemeSwitcherView x:Name="ThemeSwitcher" DockPanel.Dock="Right" Margin="12,0,0,0" VerticalAlignment="Top" />
+      <!-- The search box (L7a, plan §37): the fork keeps it in the window header (StarryEyes MainWindow.xaml:110),
+           so it shares the compose row here, docked left of the theme switch, which stays the rightmost item.
+           Focusing it opens SearchFlip below, over the workspace. -->
+      <views:SearchBoxView x:Name="SearchBoxHost" DockPanel.Dock="Right" Margin="12,0,0,0" VerticalAlignment="Top" />
       <views:ComposeBoxView x:Name="ComposeBox" />
     </DockPanel>
 
@@ -46,6 +50,12 @@
       </StackPanel>
     </Expander>
 
-    <views:WorkspaceView x:Name="Workspace" Margin="0,16,0,0" />
+    <!-- Workspace and the search flip share one Panel so the flip is literally over the workspace (the fork's
+         flip covers its main area, SearchFlip.xaml:263): same slot, same margin, the columns keep streaming
+         underneath while it is open. SearchFlipView is collapsed (IsVisible=false) whenever the flip is closed. -->
+    <Panel Margin="0,16,0,0">
+      <views:WorkspaceView x:Name="Workspace" />
+      <views:SearchFlipView x:Name="SearchFlip" />
+    </Panel>
   </DockPanel>
 </Window>

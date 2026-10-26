@@ -1,0 +1,102 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:search="using:NightlyDawn.App.Search"
+             xmlns:tl="using:NightlyDawn.App.Timelines"
+             xmlns:views="using:NightlyDawn.App.Views"
+             x:Class="NightlyDawn.App.Views.SearchFlipView"
+             x:DataType="search:SearchFlipViewModel">
+  <!-- The fork's search flip (StarryEyes Views/WindowParts/Flips/SearchFlip.xaml, 574 lines): a dimmed backdrop
+       over the main area that closes on click (:263-270), the results on the left (ResultGrid, :272-311) and a
+       286 DIP navigation column on the right (InnerGrid, :313-510) holding the query help / validity line and
+       the mode list. The WPF storyboards and the saved-search candidate list (Twitter's saved-search API, no
+       Nostr counterpart) are not ported. Sits in the same Panel as WorkspaceView in MainWindow.axaml, so "over
+       the workspace" is literal: the workspace keeps its size and streams underneath; nothing in the tab strip or
+       the columns is touched (plan §37's "触らないでください" list). -->
+  <UserControl.Styles>
+    <Style Selector="Button.search-mode">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="8,6" />
+    </Style>
+    <!-- Fork SearchFlip.xaml:385-398: the current mode's row is painted with the hovering brush. -->
+    <Style Selector="Button.search-mode.selected">
+      <Setter Property="Background" Value="{DynamicResource KrileSelectionBrush}" />
+    </Style>
+    <!-- Fork :360-368: an invalid query is reported in the "invalid" foreground. A literal rather than a Fluent
+         brush key: Fluent's critical-colour key is not something this app's own palette (KrileTheme.axaml)
+         defines, and a DynamicResource that resolves to nothing would make the error text inherit the normal
+         colour, indistinguishable from "valid" at a glance, which is the one thing this line must not be. -->
+    <Style Selector="TextBlock#SearchQueryStatus.error">
+      <Setter Property="Foreground" Value="#D13438" />
+    </Style>
+  </UserControl.Styles>
+
+  <Panel x:Name="SearchFlipRoot" IsVisible="{Binding IsOpen}">
+    <!-- Fork :263-270: a click on the dimmed area closes the flip. Under the Grid below; the result Border and the
+         navigation Border catch their own clicks, the transparent result area between them does not. -->
+    <Border x:Name="SearchBackdrop" Background="#99000000" PointerPressed="OnBackdropPressed" />
+
+    <Grid ColumnDefinitions="*,286">
+      <!-- Always present (even with nothing to show) so its width can be reported for the slim threshold
+           (plan §37.2 item 9) before the first result exists; the mode descriptions it governs are visible
+           as soon as there is text, results or not. -->
+      <Panel x:Name="SearchResultArea" Grid.Column="0" Margin="0,0,8,0" SizeChanged="OnResultAreaSizeChanged">
+        <Border x:Name="SearchResultHost" Padding="8" CornerRadius="6"
+                Background="{DynamicResource KrilePanelBackgroundBrush}"
+                BorderThickness="1" BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+                IsVisible="{Binding IsSearchResultAvailable}">
+          <Panel>
+            <!-- The same NoteRowView the timeline uses, over the tab's own NoteRow instances (SearchResultViewModel):
+                 a result row looks and acts exactly like the row it is. -->
+            <ListBox x:Name="SearchResultList" ItemsSource="{Binding SearchResult.Notes}" SelectionMode="Single"
+                     IsVisible="{Binding SearchResult, Converter={x:Static ObjectConverters.IsNotNull}}">
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="tl:NoteRow">
+                  <views:NoteRowView />
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+            <!-- Where the results would be, when the committed mode has none yet (plan §37: a mode that can be
+                 chosen must answer, not do nothing) or the keyword text had only exclusions. -->
+            <TextBlock x:Name="SearchUnavailableText" Margin="8" Opacity="0.8" TextWrapping="Wrap"
+                       Text="{Binding UnavailableText}"
+                       IsVisible="{Binding UnavailableText, Converter={x:Static ObjectConverters.IsNotNull}}" />
+          </Panel>
+        </Border>
+      </Panel>
+
+      <Border x:Name="SearchNavigation" Grid.Column="1" Padding="8" CornerRadius="6" VerticalAlignment="Top"
+              Background="{DynamicResource KrilePanelBackgroundBrush}"
+              BorderThickness="1" BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}">
+        <StackPanel Spacing="8">
+          <!-- Fork :349-368 folded into one line (SearchFlipViewModel.QueryStatusText): the keyword help outside
+               query mode, "valid" or the compile error inside it. -->
+          <TextBlock x:Name="SearchQueryStatus" TextWrapping="Wrap" FontSize="12"
+                     Text="{Binding QueryStatusText}" Classes.error="{Binding HasError}" />
+
+          <!-- Fork :369-510 (SearchOptionPanel): one row per mode, shown only while IsSearchOptionAvailable (text
+               present, not a ? query). Focusable=False as in the fork, so choosing a mode leaves the caret in the
+               search box and typing continues. The "Open user" row is visible only while the text looks like a
+               Nostr user identifier (plan §37.4's replacement for the fork's @screen_name test). -->
+          <ItemsControl x:Name="SearchModeList" ItemsSource="{Binding ModeOptions}" IsVisible="{Binding IsSearchOptionAvailable}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="search:SearchModeOption">
+                <Button x:Name="SearchModeButton" Classes="search-mode" Classes.selected="{Binding IsSelected}"
+                        IsVisible="{Binding IsVisible}" Focusable="False" Click="OnModeClick" Tag="{Binding}">
+                  <StackPanel Spacing="2">
+                    <TextBlock x:Name="SearchModeLabel" Text="{Binding Label}" FontWeight="SemiBold" />
+                    <!-- Hidden in slim mode (result area narrower than SlimWidthThreshold, plan §37.2 item 9). -->
+                    <TextBlock x:Name="SearchModeDescription" Text="{Binding Description}" FontSize="11" Opacity="0.7"
+                               TextWrapping="Wrap" IsVisible="{Binding ShowDescription}" />
+                  </StackPanel>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+    </Grid>
+  </Panel>
+</UserControl>

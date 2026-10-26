@@ -1,0 +1,21 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:core="using:NightlyDawn.Core"
+             xmlns:search="using:NightlyDawn.App.Search"
+             x:Class="NightlyDawn.App.Views.SearchBoxView"
+             x:DataType="search:SearchFlipViewModel">
+  <!-- The search box of the fork's window header (StarryEyes MainWindow.xaml:110-135: a 180 DIP TextBox in the
+       WindowCommands, GotFocus opens, Enter commits). Lives in MainWindow's compose row beside the
+       theme switch (L7a, plan §37); the panel it opens is SearchFlipView, over the workspace. Text is two-way on
+       every change (Avalonia's TextBox updates the source as you type, which is what the fork's
+       UpdateSourceTrigger=PropertyChanged did), so SearchFlipViewModel.Text's setter is the as-you-type search.
+
+       MaxLength is AppState.MaxQueryLength for the same reason QueryBox's is (L9-2, plan §34): L7b's pin-to-tab
+       turns this text into a tab query, and a query the store refuses to save must not be producible here either.
+       Keys (Enter / Esc / ↑ / ↓) are handled in code-behind on the tunnelling pass, before the TextBox's own
+       handlers, so Enter cannot fall through to a popup's IsDefault button and ↑/↓ never move the caret. -->
+  <TextBox x:Name="SearchBox" MinWidth="220" VerticalAlignment="Top"
+           MaxLength="{x:Static core:AppState.MaxQueryLength}"
+           Text="{Binding Text, Mode=TwoWay}"
+           PlaceholderText="search   (? for a KQL query)" />
+</UserControl>

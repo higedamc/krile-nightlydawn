@@ -33,7 +33,14 @@ public sealed class TimelineViewModel : INotifyPropertyChanged, IDisposable, IPu
     private readonly IProfileStore? _profileStore;
     private readonly Func<Note, NoteRowActions?>? _actionsFactory;
     private readonly IKeyStore? _keyStore;
-    private readonly HashSet<string> _knownIds = new(StringComparer.Ordinal);
+    /// <summary>Every note currently in <see cref="Notes"/>, by id. Doubles as the duplicate guard
+    /// <c>AddNote</c> always had (the same event arrives from several relays, B7) and, since L7a, as the lookup
+    /// <see cref="FindNote"/> offers the search flip: a <see cref="NoteRow"/> carries only what the row shows
+    /// (content truncated at <see cref="NoteRow.MaxContentChars"/>, no tags), so a search over the full
+    /// <see cref="Note.Content"/>, or through a compiled KQL predicate, needs the <see cref="Note"/> itself. Kept
+    /// in step with <see cref="Notes"/> by the same three places that mutate it (Subscribe's clear, AddNote's
+    /// insert, AddNote's cap), so it never holds a note the list does not show.</summary>
+    private readonly Dictionary<string, Note> _notesById = new(StringComparer.Ordinal);
 
     private CancellationTokenSource? _streamCts;
     private int _generation;
@@ -75,6 +82,12 @@ public sealed class TimelineViewModel : INotifyPropertyChanged, IDisposable, IPu
 
     /// <summary>Newest first. Mutated only via <c>postToUi</c>.</summary>
     public ObservableCollection<NoteRow> Notes { get; } = [];
+
+    /// <summary>The <see cref="Note"/> behind a row of <see cref="Notes"/>, or null when no row with that id is
+    /// currently shown (L7a). This is how <see cref="Search.SearchResultViewModel"/> matches keywords against the
+    /// full content rather than the row's truncated <see cref="NoteRow.DisplayContent"/>, and how a <c>?</c> query's
+    /// compiled predicate gets a <see cref="Note"/> to evaluate. Read on the UI thread, like <see cref="Notes"/>.</summary>
+    public Note? FindNote(string id) => _notesById.GetValueOrDefault(id);
 
     public string Query
     {
@@ -144,7 +157,7 @@ public sealed class TimelineViewModel : INotifyPropertyChanged, IDisposable, IPu
 
         CancelCurrentStream();
         Notes.Clear();
-        _knownIds.Clear();
+        _notesById.Clear();
 
         var generation = ++_generation;
         var timeline = new Timeline(Id: Guid.NewGuid().ToString("N"), Title: kql, KqlQuery: kql);
@@ -449,7 +462,7 @@ public sealed class TimelineViewModel : INotifyPropertyChanged, IDisposable, IPu
 
     private void AddNote(Note note)
     {
-        if (!_knownIds.Add(note.Id))
+        if (!_notesById.TryAdd(note.Id, note))
         {
             return; // The same event can arrive from several relays (B7); show it once.
         }
@@ -467,7 +480,7 @@ public sealed class TimelineViewModel : INotifyPropertyChanged, IDisposable, IPu
         {
             var dropped = Notes[^1];
             Notes.RemoveAt(Notes.Count - 1);
-            _knownIds.Remove(dropped.Id);
+            _notesById.Remove(dropped.Id);
         }
 
         if (!IsLoading)
