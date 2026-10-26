@@ -77,10 +77,17 @@
                well as typed, so a query the store would refuse to save (AppState.MaxQueryLength) cannot be
                entered. Without it, one over-long paste into any tab made every later save of the whole layout
                fail for the rest of the session, reported only on stderr (Lead's probes A and D). -->
+          <!-- PlaceholderText's three examples must themselves be valid KQL (kql.txt's `from` clause is
+               optional, but KqlParser.ParseFromClause requires it: plan §44 / L10). `where` is mandatory
+               everywhere, so each example ends in `where ()` ("match everything"), and SOURCE's STRING
+               argument must be quoted, so the `user(...)` example quotes a real npub rather than the bare
+               `npub1...` the fork's hint used. QueryHintComplianceTests asserts these three pieces compile,
+               read live off this PlaceholderText rather than copied into the test, so this string can never
+               drift out of sync with the grammar again. -->
           <TextBox x:Name="QueryBox" Grid.Column="0" MinWidth="420"
                    MaxLength="{x:Static core:AppState.MaxQueryLength}"
                    Text="{Binding Query, Mode=TwoWay}"
-                   PlaceholderText="from home   |   from user(npub1...)   |   from search(&quot;nostr&quot;)" />
+                   PlaceholderText="from home where ()   |   from user(&quot;npub1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqshp52w2&quot;) where ()   |   from search(&quot;nostr&quot;) where ()" />
           <Button x:Name="SubscribeButton" Grid.Column="1" Margin="8,0,0,0" Content="Subscribe" IsDefault="True"
                   Click="OnSubscribeClick" />
           <Button x:Name="CloseSelectedTabButton" Grid.Column="2" Margin="4,0,0,0" Content="×" Click="OnCloseSelectedTabClick" />
