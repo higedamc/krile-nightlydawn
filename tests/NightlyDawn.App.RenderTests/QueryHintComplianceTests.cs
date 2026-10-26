@@ -15,21 +15,25 @@ using Xunit;
 namespace NightlyDawn.App.RenderTests;
 
 /// <summary>
-/// Plan §44 / L10: <c>TabStripView.axaml</c>'s <c>QueryBox.PlaceholderText</c> shows three example queries, and
-/// every one of them must be real, compilable KQL -- the fork's own hint (<c>from home | from user(npub1...) |
-/// from search("nostr")</c>) was not: <c>where</c> is mandatory (<see cref="FilterParseException"/> says so), and
-/// a bare <c>npub1...</c> source argument is not a quoted <c>STRING</c> token at all. Typing the hint verbatim
-/// always errored (plan §42 N4 / §44).
+/// Plan §44 / L10, §48-49 / L10 v2: <c>TabStripView.axaml</c>'s <c>QueryBox</c> shows example queries in two
+/// places -- a short one in <c>PlaceholderText</c> and the full set of three in <c>ToolTip.Tip</c> (moved there
+/// in L10 v2 so the examples' length cannot grow the settings panel: a <see cref="ToolTip"/> does not
+/// participate in its owner's measure pass, <c>PlaceholderText</c> does) -- and every one of them must be real,
+/// compilable KQL. The fork's own hint (<c>from home | from user(npub1...) | from search("nostr")</c>) was not:
+/// <c>where</c> is mandatory (<see cref="FilterParseException"/> says so), and a bare <c>npub1...</c> source
+/// argument is not a quoted <c>STRING</c> token at all. Typing the hint verbatim always errored (plan §42 N4 /
+/// §44).
 ///
-/// <para>This reads <c>PlaceholderText</c> live off the realized <see cref="TextBox"/> rather than copying the
-/// three examples into the test as separate string literals -- the whole point (plan §44) is that the hint can
-/// never again drift out of sync with the grammar without this test catching it, which a hand-copied string
-/// could not do.</para>
+/// <para>This reads both <c>PlaceholderText</c> and <c>ToolTip.Tip</c> live off the realized <see cref="TextBox"/>
+/// rather than copying the examples into the test as separate string literals -- the whole point (plan §44) is
+/// that the hint can never again drift out of sync with the grammar without this test catching it, which a
+/// hand-copied string could not do.</para>
 ///
 /// <para>Mutation check performed by hand (reverted after confirming red): putting the fork's original,
-/// unparseable hint back into <c>TabStripView.axaml</c> turns <see cref="PlaceholderText_EveryExampleParsesAndCompiles"/>
+/// unparseable hint back into <c>PlaceholderText</c> turns <see cref="PlaceholderText_EveryExampleParsesAndCompiles"/>
 /// red with a <see cref="FilterParseException"/> ("KQL query must contain a 'where' clause") on the very first
-/// example.</para>
+/// example. Dropping <c>where ()</c> from the last of <c>ToolTip.Tip</c>'s three examples turns the same test
+/// red the same way, on the third example this time.</para>
 /// </summary>
 public sealed class QueryHintComplianceTests
 {
@@ -48,14 +52,18 @@ public sealed class QueryHintComplianceTests
         session.Click(settingsToggle);
 
         var queryBox = session.Find<TextBox>("QueryBox") ?? throw new Xunit.Sdk.XunitException("QueryBox not found after opening the settings toggle");
-        var hint = queryBox.PlaceholderText;
-        Assert.False(string.IsNullOrWhiteSpace(hint), "QueryBox.PlaceholderText should not be empty");
 
-        var examples = hint!.Split('|', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        Assert.Equal(3, examples.Length); // guards against the hint collapsing to one example unnoticed
+        var placeholder = queryBox.PlaceholderText;
+        Assert.False(string.IsNullOrWhiteSpace(placeholder), "QueryBox.PlaceholderText should not be empty");
+
+        var tip = ToolTip.GetTip(queryBox) as string;
+        Assert.False(string.IsNullOrWhiteSpace(tip), "QueryBox's ToolTip.Tip should not be empty");
+
+        var tipExamples = tip!.Split('|', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(3, tipExamples.Length); // guards against the tip collapsing to fewer examples unnoticed
 
         var compiler = new FilterCompiler();
-        foreach (var example in examples)
+        foreach (var example in tipExamples.Prepend(placeholder!))
         {
             var ast = compiler.Parse(example);
             var compiled = ast.Source.Kind == FilterSourceKind.Home

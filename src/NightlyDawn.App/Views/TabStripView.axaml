@@ -77,17 +77,27 @@
                well as typed, so a query the store would refuse to save (AppState.MaxQueryLength) cannot be
                entered. Without it, one over-long paste into any tab made every later save of the whole layout
                fail for the rest of the session, reported only on stderr (Lead's probes A and D). -->
-          <!-- PlaceholderText's three examples must themselves be valid KQL (kql.txt's `from` clause is
-               optional, but KqlParser.ParseFromClause requires it: plan §44 / L10). `where` is mandatory
-               everywhere, so each example ends in `where ()` ("match everything"), and SOURCE's STRING
-               argument must be quoted, so the `user(...)` example quotes a real npub rather than the bare
-               `npub1...` the fork's hint used. QueryHintComplianceTests asserts these three pieces compile,
-               read live off this PlaceholderText rather than copied into the test, so this string can never
-               drift out of sync with the grammar again. -->
+          <!-- Both the short PlaceholderText and the full ToolTip.Tip must themselves be valid KQL (kql.txt's
+               `from` clause is optional, but KqlParser.ParseFromClause requires it: plan §44 / L10, §48-49 /
+               L10 v2). `where` is mandatory everywhere, so each example ends in `where ()` ("match
+               everything"), and SOURCE's STRING argument must be quoted, so the `user(...)` example quotes a
+               real npub rather than the bare `npub1...` the fork's hint used. QueryHintComplianceTests asserts
+               every piece compiles, read live off these two properties rather than copied into the test, so
+               this text can never drift out of sync with the grammar again.
+
+               The three full examples live in ToolTip.Tip, not PlaceholderText (L10 v2, Lead's §48 review):
+               inside the settings Popup, QueryBox's available width is unconstrained, so the `*` column grows
+               to fit however long PlaceholderText's rendered ink is — at the fork's original 146-character,
+               three-example hint that pushed the settings panel to 1138 DIP wide, enough to push
+               SubscribeButton outside a 1100 DIP window (measured: 1280 DIP window had 142 DIP of margin left,
+               a 10% longer hint lost it too). A ToolTip does not participate in its owner's measure pass, so
+               it cannot move the panel's width; PlaceholderText now carries only the one short example that
+               used to fit before L10 (MinWidth 420 unaffected). -->
           <TextBox x:Name="QueryBox" Grid.Column="0" MinWidth="420"
                    MaxLength="{x:Static core:AppState.MaxQueryLength}"
                    Text="{Binding Query, Mode=TwoWay}"
-                   PlaceholderText="from home where ()   |   from user(&quot;npub1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqshp52w2&quot;) where ()   |   from search(&quot;nostr&quot;) where ()" />
+                   PlaceholderText="from home where ()"
+                   ToolTip.Tip="from home where ()   |   from user(&quot;npub1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqshp52w2&quot;) where ()   |   from search(&quot;nostr&quot;) where ()" />
           <Button x:Name="SubscribeButton" Grid.Column="1" Margin="8,0,0,0" Content="Subscribe" IsDefault="True"
                   Click="OnSubscribeClick" />
           <Button x:Name="CloseSelectedTabButton" Grid.Column="2" Margin="4,0,0,0" Content="×" Click="OnCloseSelectedTabClick" />
