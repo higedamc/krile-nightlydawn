@@ -235,12 +235,15 @@ panel always opens empty.
   `search` filter), and this build sends no NIP-50 request at all.
 
 Deliberate differences from the fork, all in `src/NightlyDawn.App/Search/`:
-positive words are OR-ed for the live search *and* for the future pin-to-tab
-(the fork pinned the same words as AND, so a pinned search changed its own
-result set); the substring comparison is ordinal rather than culture-aware, so
-the rule is the same on every OS and CI runner; and the fork's saved-search
-candidates came from Twitter's saved-search API, which has no Nostr
-counterpart, so they are not ported.
+positive words are OR-ed for the live search *and* for pin-to-tab (the fork
+pinned the same words as AND, so a pinned search changed its own result set);
+the substring comparison is case-insensitive end to end -- the live box and
+the compiled `text contains` a pinned tab's KQL query runs both compare
+`OrdinalIgnoreCase` rather than culture-aware, so it is one rule rather than
+two that happen to agree in the common case, and the rule is the same on
+every OS and CI runner; and the fork's saved-search candidates came from
+Twitter's saved-search API, which has no Nostr counterpart, so they are not
+ported.
 
 ## Theme
 

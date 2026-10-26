@@ -306,7 +306,7 @@ internal static class KqlCompiler
         switch (field)
         {
             case "text":
-                return note => CompareString(note.Content, op, value);
+                return note => CompareText(note.Content, op, value);
 
             case "kind":
                 {
@@ -377,6 +377,17 @@ internal static class KqlCompiler
             ? note => actual(note) == expected
             : note => actual(note) != expected;
     }
+
+    /// <summary>Compares the <c>text</c> field, which must match <see cref="KeywordMatcher.IsMatch"/>'s substring
+    /// rule so that pinning a search result into a tab (<c>KqlWriter</c>) never changes the set of notes a note
+    /// row shows: "contains" is case-insensitive, same as the live search box. The other operators on this field
+    /// fall through to the shared <see cref="CompareString"/> comparison. "text" is never pushed down to
+    /// <see cref="PushDown"/> (only kind / user.npub / tags.t / created_at are), so widening its local predicate
+    /// here cannot violate RelayFilter's superset invariant.</summary>
+    private static bool CompareText(string actual, FilterComparisonOperator op, string value) =>
+        op == FilterComparisonOperator.Contains
+            ? actual.Contains(value, StringComparison.OrdinalIgnoreCase)
+            : CompareString(actual, op, value);
 
     private static bool CompareString(string actual, FilterComparisonOperator op, string value) => op switch
     {

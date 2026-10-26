@@ -1,4 +1,5 @@
 using System.Linq;
+using NightlyDawn.Core;
 
 namespace NightlyDawn.App.Search;
 
@@ -12,9 +13,12 @@ namespace NightlyDawn.App.Search;
 /// (1) comparison is <see cref="StringComparison.OrdinalIgnoreCase"/> rather than the fork's
 /// <c>CurrentCultureIgnoreCase</c>, because .NET on ICU treats some characters as ignorable in culture-aware
 /// <c>IndexOf</c> (an empty or zero-width needle matches everywhere), and note content is relay-supplied text;
-/// ordinal makes the rule the same on macOS, Linux and in CI. (2) The fork's <c>PinToTab</c> generated an AND over
-/// the same positive words (<c>SearchResultModel.cs:160</c>) -- a live result that changed shape when pinned.
-/// Plan §37.3 settles that on OR for both; L7b's pin reuses <see cref="Parse"/> so there is one rule, not two.</para>
+/// ordinal makes the rule the same on macOS, Linux and in CI. <see cref="KqlCompiler"/>'s <c>text contains</c>
+/// compares the same way, so a pinned tab's compiled query matches exactly the rows the live box showed it --
+/// not a second rule that happens to agree in the common case (plan §42). (2) The fork's <c>PinToTab</c>
+/// generated an AND over the same positive words (<c>SearchResultModel.cs:160</c>) -- a live result that changed
+/// shape when pinned. Plan §37.3 settles that on OR for both; L7b's pin reuses <see cref="Parse"/> so there is
+/// one rule, not two.</para>
 ///
 /// <para>Pure and allocation-light on purpose: <see cref="SearchFlipViewModel"/> re-runs it on every keystroke in
 /// <see cref="SearchMode.CurrentTab"/>, over up to <see cref="Timelines.TimelineViewModel.DefaultMaxNotes"/> notes.</para>
@@ -84,5 +88,37 @@ public sealed class KeywordMatcher
         }
 
         return true;
+    }
+
+    /// <summary>The same rule as <see cref="IsMatch"/>, as a <see cref="FilterNode"/>: positive words OR'd
+    /// together, each non-empty negative word subtracted with <c>&amp;&amp; !(...)</c> (plan §37.3: one rule,
+    /// not two -- <see cref="SearchFlipViewModel.PinToTab"/> ANDs this onto the current tab's own query, L7b).
+    /// Only <see cref="IsMatch"/> itself has no case for "no positive words" to mirror, so this throws instead
+    /// of inventing one; callers check <see cref="IsEmpty"/> first, exactly as the one caller that builds a
+    /// result to pin already does.</summary>
+    public FilterNode ToFilterNode()
+    {
+        if (IsEmpty)
+        {
+            throw new InvalidOperationException("ToFilterNode needs at least one positive word; check IsEmpty first.");
+        }
+
+        FilterNode node = new FilterComparison("text", FilterComparisonOperator.Contains, _positive[0]);
+        for (var i = 1; i < _positive.Length; i++)
+        {
+            node = new FilterOr(node, new FilterComparison("text", FilterComparisonOperator.Contains, _positive[i]));
+        }
+
+        foreach (var word in _negative)
+        {
+            if (word.Length == 0)
+            {
+                continue;
+            }
+
+            node = new FilterAnd(node, new FilterNot(new FilterComparison("text", FilterComparisonOperator.Contains, word)));
+        }
+
+        return node;
     }
 }

@@ -63,6 +63,8 @@ public sealed partial class SearchFlipView : UserControl
         }
     }
 
+    private void OnPinClick(object? sender, RoutedEventArgs e) => _search?.PinToTab();
+
     private void OnResultListKeyDown(object? sender, KeyEventArgs e)
     {
         if (e.Key == Key.Escape && _search is not null)

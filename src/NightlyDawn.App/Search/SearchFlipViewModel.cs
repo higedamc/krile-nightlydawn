@@ -73,6 +73,7 @@ public sealed class SearchFlipViewModel : INotifyPropertyChanged, IDisposable
         TimeSpan.FromMilliseconds(100));
 
     private readonly Func<TimelineViewModel?> _currentTab;
+    private readonly Func<ColumnViewModel?> _currentColumn;
     private readonly IFilterCompiler _compiler;
     private readonly Stack<(string Text, SearchMode Mode)> _backStack = new();
     private readonly SearchModeOption[] _modeOptions;
@@ -88,19 +89,26 @@ public sealed class SearchFlipViewModel : INotifyPropertyChanged, IDisposable
     private bool _displaySlimView;
     private string? _errorText;
     private string? _unavailableText;
+    private string? _pinError;
     private SearchResultViewModel? _searchResult;
     private Func<Note, bool>? _compiledQuery;
     private bool _disposed;
 
     /// <param name="currentTab">Resolves the tab a <see cref="SearchMode.CurrentTab"/> search runs over, read fresh at
     /// every commit (the fork read <c>TabManager.CurrentFocusTab</c> the same way). Null means no tab is selected.</param>
+    /// <param name="currentColumn">Resolves the column <see cref="PinToTab"/> adds its new tab to (L7b) -- the column
+    /// that owns <paramref name="currentTab"/>'s tab, read fresh at pin time the same way. Null means no column is
+    /// selected.</param>
     /// <param name="compiler">The KQL compiler the <c>?</c> query mode validates and compiles with -- the same one the
-    /// relay layer uses for tab queries, so "valid here" and "valid as a tab query" are one judgement.</param>
-    public SearchFlipViewModel(Func<TimelineViewModel?> currentTab, IFilterCompiler compiler)
+    /// relay layer uses for tab queries, so "valid here" and "valid as a tab query" are one judgement. Also what
+    /// <see cref="PinToTab"/> parses the current tab's own query with, to AND it with the keyword expression.</param>
+    public SearchFlipViewModel(Func<TimelineViewModel?> currentTab, Func<ColumnViewModel?> currentColumn, IFilterCompiler compiler)
     {
         ArgumentNullException.ThrowIfNull(currentTab);
+        ArgumentNullException.ThrowIfNull(currentColumn);
         ArgumentNullException.ThrowIfNull(compiler);
         _currentTab = currentTab;
+        _currentColumn = currentColumn;
         _compiler = compiler;
         _modeOptions =
         [
@@ -252,6 +260,17 @@ public sealed class SearchFlipViewModel : INotifyPropertyChanged, IDisposable
         private set => SetField(ref _unavailableText, value);
     }
 
+    /// <summary>Why the last <see cref="PinToTab"/> call pinned nothing, shown next to the Pin button (plan §37's
+    /// "a mode that can be chosen must answer, not do nothing" applies to the button too, plan §41 item ⑤: a full
+    /// column must say so, not swallow the click). Null once nothing is wrong -- cleared by the next commit and by
+    /// <see cref="PinToTab"/> succeeding, but not merely by editing <see cref="Text"/>, so the reason stays visible
+    /// until the person does something about it.</summary>
+    public string? PinError
+    {
+        get => _pinError;
+        private set => SetField(ref _pinError, value);
+    }
+
     /// <summary>The live result of the last commit, or null. Replacing it disposes the previous one (fork :86-93).</summary>
     public SearchResultViewModel? SearchResult
     {
@@ -370,6 +389,91 @@ public sealed class SearchFlipViewModel : INotifyPropertyChanged, IDisposable
         FocusRequested?.Invoke(SearchFocusTarget.SearchBox);
     }
 
+    /// <summary>Fork <c>SearchResultViewModel.PinToTab</c>, redirected to close the flip rather than the fork's
+    /// <see cref="RewindStack"/> (plan §41's brief: pin is a destination, not one more step back through the
+    /// history). Plan §37.2 item 11 / §41: a no-op while nothing is committed -- an L7c mode and a query-mode error
+    /// both never reach here, because <see cref="SearchResult"/> is only non-null once <see cref="CommitSearch"/>
+    /// actually built one (see its branches; neither case does). A full column or an unparseable current-tab query
+    /// report through <see cref="PinError"/> instead of throwing or silently doing nothing.</summary>
+    public void PinToTab()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (SearchResult is not { } result)
+        {
+            return;
+        }
+
+        var column = _currentColumn();
+        if (column is null)
+        {
+            PinError = "No column is selected to pin into.";
+            return;
+        }
+
+        if (!column.CanAddTab)
+        {
+            PinError = $"This column already holds {AppState.MaxTabsPerColumn} tabs, the most it can carry -- close one before pinning.";
+            return;
+        }
+
+        string kql;
+        try
+        {
+            kql = BuildPinnedQuery(result.Query);
+        }
+        catch (NightlyDawnException ex)
+        {
+            PinError = $"Could not pin: {ex.Message}";
+            return;
+        }
+
+        if (kql.Length > AppState.MaxQueryLength)
+        {
+            // Checked before AddTab, not after: AppStateShape.cs rejects any tab.Query over MaxQueryLength on
+            // save, and once a tab exists with an unsaveable query every later layout save fails too (plan §42
+            // F2, the fork's own L9-2 failure mode). Pinning the original tab's query onto a keyword expression
+            // can cross the 4096-character bound the search box and query box each separately stay under.
+            PinError = $"The combined query would be {kql.Length} characters, over the saved layout's {AppState.MaxQueryLength}-character limit -- shorten the current tab's query or the search text before pinning.";
+            return;
+        }
+
+        var tab = column.AddTab();
+        tab.Query = kql;
+        tab.Subscribe();
+        PinError = null;
+        Close();
+    }
+
+    /// <summary>The query-mode text verbatim past its <c>?</c> (plan §41 item ③: it already names its own
+    /// <c>from</c>, so there is nothing of the current tab's query to combine it with), or, in
+    /// <see cref="SearchMode.CurrentTab"/> mode, the current tab's own query ANDed with the keyword matcher
+    /// rebuilt from <paramref name="committedText"/> via <see cref="KeywordMatcher.Parse"/> and
+    /// <see cref="KeywordMatcher.ToFilterNode"/> -- the same OR rule <see cref="CommitSearch"/> itself used
+    /// (plan §41 item ①), so the set the pinned tab opens on is the set this result was already showing
+    /// (plan §41 item ②).</summary>
+    private string BuildPinnedQuery(string committedText)
+    {
+        if (committedText.StartsWith('?'))
+        {
+            return committedText[1..];
+        }
+
+        var tabQuery = _currentTab()?.Query.Trim();
+        if (string.IsNullOrEmpty(tabQuery))
+        {
+            throw new FilterParseException("The current tab has no query of its own to combine with.");
+        }
+
+        var originalAst = _compiler.Parse(tabQuery);
+        var keywordNode = KeywordMatcher.Parse(committedText).ToFilterNode();
+        // Keyword first, original tab query second: AND is commutative and PushDown walks both sides, so this
+        // changes nothing about which notes match -- only the label (ActiveTimeline.Title is the written KQL)
+        // shows the word the person typed before the tab it came from, instead of truncating it off the end
+        // of a long original query (plan §42 N1).
+        var combinedWhere = originalAst.Where is null ? keywordNode : new FilterAnd(keywordNode, originalAst.Where);
+        return KqlWriter.Write(new FilterAst(originalAst.Source, combinedWhere));
+    }
+
     /// <summary>Fork :168-176: next mode in enum order, wrapping, skipping <see cref="SearchMode.UserScreenName"/>
     /// unless the text qualifies.</summary>
     public void SetNextSearchOption()
@@ -477,6 +581,7 @@ public sealed class SearchFlipViewModel : INotifyPropertyChanged, IDisposable
     private void CommitSearch()
     {
         _previousCommit = Text;
+        PinError = null; // A new commit is a new result; a stale "column is full" from the last one would outlive it.
         if (_backStack.Count > 0)
         {
             var top = _backStack.Peek();
@@ -554,6 +659,7 @@ public sealed class SearchFlipViewModel : INotifyPropertyChanged, IDisposable
         IsSearchResultAvailable = false;
         SearchResult = null;
         UnavailableText = null;
+        PinError = null;
         IsOpen = false;
         _backStack.Clear();
         RaisePropertyChanged(nameof(BackStackDepth));

@@ -47,23 +47,37 @@
                 Background="{DynamicResource KrilePanelBackgroundBrush}"
                 BorderThickness="1" BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
                 IsVisible="{Binding IsSearchResultAvailable}">
-          <Panel>
-            <!-- The same NoteRowView the timeline uses, over the tab's own NoteRow instances (SearchResultViewModel):
-                 a result row looks and acts exactly like the row it is. -->
-            <ListBox x:Name="SearchResultList" ItemsSource="{Binding SearchResult.Notes}" SelectionMode="Single"
-                     IsVisible="{Binding SearchResult, Converter={x:Static ObjectConverters.IsNotNull}}">
-              <ListBox.ItemTemplate>
-                <DataTemplate x:DataType="tl:NoteRow">
-                  <views:NoteRowView />
-                </DataTemplate>
-              </ListBox.ItemTemplate>
-            </ListBox>
-            <!-- Where the results would be, when the committed mode has none yet (plan §37: a mode that can be
-                 chosen must answer, not do nothing) or the keyword text had only exclusions. -->
-            <TextBlock x:Name="SearchUnavailableText" Margin="8" Opacity="0.8" TextWrapping="Wrap"
-                       Text="{Binding UnavailableText}"
-                       IsVisible="{Binding UnavailableText, Converter={x:Static ObjectConverters.IsNotNull}}" />
-          </Panel>
+          <DockPanel>
+            <!-- Plan §37.2 item 11 / §41, L7b: fixes the current result into its own tab. Visible only once a real
+                 result exists, the same condition SearchResultList's own IsVisible already uses, so an L7c "not
+                 implemented" placeholder or a query-mode error never offers a button that would have nothing to
+                 pin. PinError surfaces a full column or an unpinnable current-tab query instead of the click doing
+                 nothing (plan §41 item 5). -->
+            <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,8"
+                        IsVisible="{Binding SearchResult, Converter={x:Static ObjectConverters.IsNotNull}}">
+              <Button x:Name="PinToTabButton" Content="Pin to tab" HorizontalAlignment="Left" Click="OnPinClick" />
+              <TextBlock x:Name="PinErrorText" Foreground="#D13438" TextWrapping="Wrap" FontSize="12"
+                         Text="{Binding PinError}"
+                         IsVisible="{Binding PinError, Converter={x:Static ObjectConverters.IsNotNull}}" />
+            </StackPanel>
+            <Panel>
+              <!-- The same NoteRowView the timeline uses, over the tab's own NoteRow instances (SearchResultViewModel):
+                   a result row looks and acts exactly like the row it is. -->
+              <ListBox x:Name="SearchResultList" ItemsSource="{Binding SearchResult.Notes}" SelectionMode="Single"
+                       IsVisible="{Binding SearchResult, Converter={x:Static ObjectConverters.IsNotNull}}">
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="tl:NoteRow">
+                    <views:NoteRowView />
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+              <!-- Where the results would be, when the committed mode has none yet (plan §37: a mode that can be
+                   chosen must answer, not do nothing) or the keyword text had only exclusions. -->
+              <TextBlock x:Name="SearchUnavailableText" Margin="8" Opacity="0.8" TextWrapping="Wrap"
+                         Text="{Binding UnavailableText}"
+                         IsVisible="{Binding UnavailableText, Converter={x:Static ObjectConverters.IsNotNull}}" />
+            </Panel>
+          </DockPanel>
         </Border>
       </Panel>
 

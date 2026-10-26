@@ -279,6 +279,57 @@ public sealed class SearchFlipRenderTests
         Assert.Equal(offered, session.ModeButton("Open user").IsVisible);
     }
 
+    /// <summary>Plan §37.2 item 11 / §41, L7b: clicking the Pin button adds a new tab, selects it, and closes the
+    /// flip -- end to end through the real button <c>Click</c>, not <c>_search.PinToTab()</c> (the claim under
+    /// test is that the button a person clicks is wired; <c>SearchFlipViewModelPinTests</c> covers the KQL this
+    /// produces without Avalonia). Not the fork's <c>RewindStack</c>: plan §41's brief makes pin a destination.</summary>
+    [AvaloniaFact]
+    public void ClickingPin_AddsANewTab_SelectsIt_AndClosesThePanel()
+    {
+        using var session = new Session();
+        session.FocusSearchBox();
+        session.Type("alpha -gamma");
+        Assert.Equal(["alpha one"], session.ResultContents());
+        Assert.True(session.PinButton.IsVisible);
+        Assert.Single(session.Tabs());
+
+        session.Click(session.PinButton);
+
+        Assert.Equal(2, session.Tabs().Count);
+        var pinned = session.Tabs()[1];
+        Assert.Same(pinned, session.SelectedTab());
+        Assert.False(session.Find<Panel>("SearchFlipRoot")!.IsVisible, "pinning must close the flip");
+        var list = session.Find<ListBox>("TimelineList");
+        Assert.NotNull(list);
+        Assert.Same(pinned, list!.DataContext); // The strip actually switched to the pinned tab's own view.
+    }
+
+    /// <summary>Plan §37's "a mode that can be chosen must answer, not do nothing", applied to the Pin button
+    /// (plan §41 item ⑤): a full column reports through <c>PinErrorText</c> instead of the click doing nothing,
+    /// and the flip stays open so the person can see why.</summary>
+    [AvaloniaFact]
+    public void ClickingPin_WhenTheColumnIsFull_ShowsThePinError_AndLeavesThePanelOpen()
+    {
+        using var session = new Session();
+        var column = ((WorkspaceViewModel)session.Window.DataContext!).Columns[0];
+        while (column.CanAddTab)
+        {
+            column.AddTab();
+        }
+
+        session.FocusSearchBox();
+        session.Type("alpha");
+        Assert.True(session.PinButton.IsVisible);
+        var tabCountBefore = session.Tabs().Count;
+
+        session.Click(session.PinButton);
+
+        Assert.Equal(tabCountBefore, session.Tabs().Count);
+        Assert.True(session.Find<Panel>("SearchFlipRoot")!.IsVisible, "a failed pin must not close the panel");
+        Assert.True(session.PinErrorTextBlock.IsVisible);
+        Assert.Contains("already holds", session.PinErrorTextBlock.Text);
+    }
+
     /// <summary>Plan §37.2 item 9: below the fork's 572 DIP result width the mode descriptions are hidden and
     /// the labels stay. Measured by narrowing the real window, not by setting a flag.</summary>
     [AvaloniaFact]
@@ -382,9 +433,12 @@ public sealed class SearchFlipRenderTests
 
             // Give the single default tab a query and subscribe it, as a person would through the settings popup
             // (WindowChromeRenderTests does the same); the fake factory ignores the query text and streams the
-            // four notes. The flip itself is never touched here.
+            // four notes. The flip itself is never touched here. "where ()" (plan §4's only way to spell an empty
+            // predicate) rather than a bare "from kind(...)": L7a never parsed this text, so either spelling was
+            // fine then, but L7b's PinToTab does parse it (to AND the keyword expression onto it), and a bare
+            // "from" with no "where" is a FilterParseException (KqlParser.ParseWhereClause).
             var tab = ((WorkspaceViewModel)Window.DataContext!).Columns[0].Tabs[0];
-            tab.Query = "from kind(\"1\")";
+            tab.Query = "from kind(\"1\") where ()";
             tab.Subscribe();
             Pump(() => !tab.IsLoading && Find<ListBox>("TimelineList")?.ItemCount == SampleContents.Count, "the timeline never showed the fixture notes");
 
@@ -461,6 +515,14 @@ public sealed class SearchFlipRenderTests
             Assert.Single(FindAll<Button>("SearchModeButton"), b => b.Classes.Contains("selected")).Tag is SearchModeOption o
                 ? o.Label
                 : throw new Xunit.Sdk.XunitException("the selected mode row has no option");
+
+        public Button PinButton => Find<Button>("PinToTabButton") ?? throw new Xunit.Sdk.XunitException("PinToTabButton not found");
+
+        public TextBlock PinErrorTextBlock => Find<TextBlock>("PinErrorText") ?? throw new Xunit.Sdk.XunitException("PinErrorText not found");
+
+        public IReadOnlyList<TimelineViewModel> Tabs() => ((WorkspaceViewModel)Window.DataContext!).Columns[0].Tabs;
+
+        public TimelineViewModel? SelectedTab() => ((WorkspaceViewModel)Window.DataContext!).Columns[0].SelectedTab;
 
         public void Pump() => Dispatcher.UIThread.RunJobs();
 

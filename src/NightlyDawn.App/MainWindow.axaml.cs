@@ -71,12 +71,13 @@ public sealed partial class MainWindow : Window
             theme => ThemeController.Apply(Application.Current!, theme));
         this.FindControl<ThemeSwitcherView>("ThemeSwitcher")!.Attach(_theme);
 
-        // Search flip (L7a, plan §37): the fork's search box opens a panel over the main area. The view model is
-        // Avalonia-free and reaches the workspace only through the delegate (the tab a search runs over is read at
-        // commit time, like the fork's TabManager.CurrentFocusTab). The ? query mode compiles through the same
-        // FilterCompiler the relay layer uses for tab queries -- Filters is a project this assembly already
-        // references; the App stays clear of NightlyDawn.Nostr and NightlyDawn.Keys (B9, ArchitectureTests).
-        _search = new SearchFlipViewModel(() => _workspace.SelectedColumn?.SelectedTab, new FilterCompiler());
+        // Search flip (L7a, plan §37; PinToTab is L7b, plan §41): the fork's search box opens a panel over the main
+        // area. The view model is Avalonia-free and reaches the workspace only through delegates (the tab a search
+        // runs over, and the column PinToTab adds its new tab to, are both read fresh when needed, like the fork's
+        // TabManager.CurrentFocusTab). The ? query mode compiles through the same FilterCompiler the relay layer
+        // uses for tab queries -- Filters is a project this assembly already references; the App stays clear of
+        // NightlyDawn.Nostr and NightlyDawn.Keys (B9, ArchitectureTests).
+        _search = new SearchFlipViewModel(() => _workspace.SelectedColumn?.SelectedTab, () => _workspace.SelectedColumn, new FilterCompiler());
         _search.FocusRequested += OnSearchFocusRequested;
         _searchBox = this.FindControl<SearchBoxView>("SearchBoxHost")!;
         _searchBox.Attach(_search);
