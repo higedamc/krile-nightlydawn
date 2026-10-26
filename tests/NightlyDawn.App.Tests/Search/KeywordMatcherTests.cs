@@ -1,4 +1,5 @@
 using NightlyDawn.App.Search;
+using NightlyDawn.Core;
 using Xunit;
 
 namespace NightlyDawn.App.Tests.Search;
@@ -68,4 +69,43 @@ public class KeywordMatcherTests
 
         Assert.True(matcher.IsMatch("alpha"));
     }
+
+    /// <summary>L7b's pin: the <see cref="FilterNode"/> <see cref="KeywordMatcher.ToFilterNode"/> builds must
+    /// accept and reject exactly what <see cref="KeywordMatcher.IsMatch"/> does, checked directly against the
+    /// node (no KQL text, no compiler) so a mismatch names which side is wrong.</summary>
+    [Fact]
+    public void ToFilterNode_AcceptsAndRejectsTheSameContentAsIsMatch()
+    {
+        var matcher = KeywordMatcher.Parse("alpha gamma -two");
+        var node = matcher.ToFilterNode();
+
+        Assert.True(Evaluate(node, "alpha one"));
+        Assert.True(Evaluate(node, "beta gamma"));
+        Assert.False(Evaluate(node, "beta two")); // no positive word.
+        Assert.False(Evaluate(node, "alpha two")); // excluded.
+        Assert.Equal(matcher.IsMatch("alpha one"), Evaluate(node, "alpha one"));
+        Assert.Equal(matcher.IsMatch("alpha two"), Evaluate(node, "alpha two"));
+    }
+
+    [Fact]
+    public void ToFilterNode_WithOnlyExclusions_Throws()
+    {
+        // IsEmpty's whole point (OnlyExclusions_MatchNothing_AndReportEmpty above) is that callers check it
+        // before building a result to pin; ToFilterNode has no "match nothing" node to hand back instead.
+        var matcher = KeywordMatcher.Parse("-alpha");
+
+        Assert.Throws<InvalidOperationException>(() => matcher.ToFilterNode());
+    }
+
+    // A tiny evaluator over the three node shapes ToFilterNode can produce (Comparison/Not/And/Or), checked only
+    // against a note's content -- independent of KqlCompiler, so this test cannot pass merely because the
+    // compiler also gets ToFilterNode's shape right.
+    private static bool Evaluate(FilterNode node, string content) => node switch
+    {
+        FilterComparison(_, FilterComparisonOperator.Contains, var value) => content.Contains(value, StringComparison.OrdinalIgnoreCase),
+        FilterNot(var operand) => !Evaluate(operand, content),
+        FilterAnd(var left, var right) => Evaluate(left, content) && Evaluate(right, content),
+        FilterOr(var left, var right) => Evaluate(left, content) || Evaluate(right, content),
+        _ => throw new ArgumentOutOfRangeException(nameof(node), node, "Unknown FilterNode."),
+    };
 }

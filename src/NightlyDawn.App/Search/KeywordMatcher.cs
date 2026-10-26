@@ -1,4 +1,5 @@
 using System.Linq;
+using NightlyDawn.Core;
 
 namespace NightlyDawn.App.Search;
 
@@ -84,5 +85,37 @@ public sealed class KeywordMatcher
         }
 
         return true;
+    }
+
+    /// <summary>The same rule as <see cref="IsMatch"/>, as a <see cref="FilterNode"/>: positive words OR'd
+    /// together, each non-empty negative word subtracted with <c>&amp;&amp; !(...)</c> (plan §37.3: one rule,
+    /// not two -- <see cref="SearchFlipViewModel.PinToTab"/> ANDs this onto the current tab's own query, L7b).
+    /// Only <see cref="IsMatch"/> itself has no case for "no positive words" to mirror, so this throws instead
+    /// of inventing one; callers check <see cref="IsEmpty"/> first, exactly as the one caller that builds a
+    /// result to pin already does.</summary>
+    public FilterNode ToFilterNode()
+    {
+        if (IsEmpty)
+        {
+            throw new InvalidOperationException("ToFilterNode needs at least one positive word; check IsEmpty first.");
+        }
+
+        FilterNode node = new FilterComparison("text", FilterComparisonOperator.Contains, _positive[0]);
+        for (var i = 1; i < _positive.Length; i++)
+        {
+            node = new FilterOr(node, new FilterComparison("text", FilterComparisonOperator.Contains, _positive[i]));
+        }
+
+        foreach (var word in _negative)
+        {
+            if (word.Length == 0)
+            {
+                continue;
+            }
+
+            node = new FilterAnd(node, new FilterNot(new FilterComparison("text", FilterComparisonOperator.Contains, word)));
+        }
+
+        return node;
     }
 }
