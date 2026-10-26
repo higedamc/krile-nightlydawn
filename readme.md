@@ -203,6 +203,45 @@ command above. Avalonia uses its native macOS backend; nothing else is needed.
    NIGHTLYDAWN_SCREENSHOT=/tmp/nightlydawn-x11.png     NIGHTLYDAWN_BACKEND=x11     dotnet run --project src/NightlyDawn.Host
    ```
 
+## Search
+
+The search box is in the header, beside the theme switch. Putting the caret in
+it opens a panel over the workspace — the fork's "search flip"
+(`StarryEyes/Views/WindowParts/Flips/SearchFlip.xaml`). The columns keep
+streaming underneath and are not filtered; results appear inside the panel; no
+tab is added. (Turning a result into a tab is the fork's separate *pin to tab*
+command and is not in this build yet.) Nothing about a search is persisted: the
+panel always opens empty.
+
+- **Words** — `alpha delta` lists the notes the selected tab is showing that
+  contain *either* word (case-insensitive substring; words are split on space,
+  tab and ideographic space). `-gamma` drops notes that contain it. The list
+  updates as you type.
+- **`?` query** — the rest of the box is KQL in the same grammar as a tab's
+  query, e.g. `?from kind("1") where text contains "beta"`. It is validated as
+  you type (the line under the box says whether it compiles and why not) and
+  runs over the selected tab's notes when you press Enter. `from home` and
+  `from mentions` are refused here: the panel does not resolve a follow list.
+- **Keys** — Enter moves keyboard focus into the results. Esc goes back one
+  search and closes the panel on the last one. Clicking the dimmed area closes
+  it. Closing clears the box, the results and the history.
+- **Where to search** (↑/↓, or click a row in the panel) — *This tab* works.
+  *Loaded notes*, *Relays*, *People* and *Open user* (the last one is offered
+  only when the text is an `npub1…`, `nprofile1…`, 64-hex pubkey or NIP-05
+  `name@domain`) can be chosen and answer "not implemented yet" where the
+  results would be. They belong to a later leaf: relay search will go to a
+  separate `NIGHTLYDAWN_SEARCH_RELAYS` pool, never to the timeline relays
+  (a relay without NIP-50 closes the whole subscription when it sees a
+  `search` filter), and this build sends no NIP-50 request at all.
+
+Deliberate differences from the fork, all in `src/NightlyDawn.App/Search/`:
+positive words are OR-ed for the live search *and* for the future pin-to-tab
+(the fork pinned the same words as AND, so a pinned search changed its own
+result set); the substring comparison is ordinal rather than culture-aware, so
+the rule is the same on every OS and CI runner; and the fork's saved-search
+candidates came from Twitter's saved-search API, which has no Nostr
+counterpart, so they are not ported.
+
 ## Theme
 
 The palette is Krile's own: a dark-leaning purple, with a light variant of the
