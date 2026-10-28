@@ -62,7 +62,12 @@ public sealed class MainWindowColumnRoutingTests
     {
         column.Query = "from home";
         column.Subscribe();
-        Pump(() => !column.IsLoading, "a column's timeline stream never finished loading");
+        // `!X.IsLoading` alone cannot tell "never subscribed" from "finished" (plan §46/§50;
+        // WaitConditionSoundnessTests demonstrates it). ANDing with `Status != IdleStatus` closes
+        // the gap for a *first* Subscribe() only -- Status is never reset, so it does NOT
+        // generalize to a resubscribe (use a positive condition, as AccountWiringRenderTests.cs's
+        // retry does, or a freshly captured StreamCompletion, as AvatarRenderTests.cs's helper does).
+        Pump(() => !column.IsLoading && column.Status != TimelineViewModel.IdleStatus, "a column's timeline stream never finished loading");
     }
 
     private static void Pump(Func<bool> condition, string timeoutMessage)

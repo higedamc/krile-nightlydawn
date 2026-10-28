@@ -252,7 +252,15 @@ public sealed class AvatarRenderTests
         public void Subscribe()
         {
             _tab.Subscribe();
-            Pump(() => !_tab.IsLoading, "the timeline stream never finished");
+            // This helper is called twice by ARowThatIsGoneBeforeTheFetchCompletes..., the second time
+            // expecting zero notes -- so neither `Status != IdleStatus` nor a note count works here: by
+            // the second call, Status is already left over from the first Subscribe() (never reset), so
+            // that AND would be true before this call's own retry even starts, degrading back to the
+            // lone, unsound `!IsLoading` (Lead review, PR #50). Capturing StreamCompletion right after
+            // calling Subscribe() pins *this* call's task, not the stale one from before -- IsCompleted
+            // on it is false until this specific subscribe actually finishes, whichever one it is.
+            var completion = _tab.StreamCompletion;
+            Pump(() => completion.IsCompleted && !_tab.IsLoading, "the timeline stream never finished");
             Dispatcher.UIThread.RunJobs();
             Window.CaptureRenderedFrame(); // Realises the item containers so the row views exist and are attached.
             Dispatcher.UIThread.RunJobs();
