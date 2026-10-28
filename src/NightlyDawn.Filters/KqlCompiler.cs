@@ -107,9 +107,11 @@ internal static class KqlCompiler
                 {
                     // NostrFilter.Search (NIP-50) is never emitted: not every relay implements it, and relays that
                     // do may stem/fuzzy-match, which is narrower than our own Contains — unsound either way
-                    // (plan §7.2). `from search(...)` is instead exactly a local `text contains "..."` predicate.
+                    // (plan §7.2). `from search(...)` is instead exactly a local `text contains "..."` predicate,
+                    // so it matches case-insensitively too (plan §12/L12) -- CompareText already does this for
+                    // `where text contains "..."` below; this keeps the two spellings of the same rule aligned.
                     var term = ast.Source.Argument!;
-                    sourcePredicate = note => note.Content.Contains(term, StringComparison.Ordinal);
+                    sourcePredicate = note => note.Content.Contains(term, StringComparison.OrdinalIgnoreCase);
                     break;
                 }
 
