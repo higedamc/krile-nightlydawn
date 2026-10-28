@@ -1,3 +1,4 @@
+using System.Linq;
 using NightlyDawn.Core;
 using Xunit;
 
@@ -330,6 +331,32 @@ public class FilterCompilerCompileTests
 
         Assert.True(compiled.LocalPredicate!(TestNotes.Make(content: "Bitcoin")));
         Assert.False(compiled.LocalPredicate(TestNotes.Make(content: "bitcoin")));
+    }
+
+    [Fact]
+    public void Evaluate_SearchSource_AcceptsTheSameSetAsTextContains_CaseInsensitive()
+    {
+        // plan §47/§57 (L12): `from search("x")` and `where text contains "x"` are the two spellings of the
+        // same local "part of the content" rule -- L7b (plan §42 F1, Evaluate_TextContains_IsCaseInsensitive
+        // above) made the `where` spelling case-insensitive but left `from search(...)` on Ordinal, so the two
+        // disagreed on a mixed-case fixture. This pins them to the identical accept set now that both use
+        // OrdinalIgnoreCase.
+        var fixture = new[]
+        {
+            TestNotes.Make(content: "Bitcoin is fine"),
+            TestNotes.Make(content: "bitcoin lowercase"),
+            TestNotes.Make(content: "BITCOIN shouting"),
+            TestNotes.Make(content: "no match here"),
+        };
+
+        var searchPredicate = _sut.Compile(_sut.Parse("from search(\"bitcoin\") where ()")).LocalPredicate!;
+        var containsPredicate = _sut.Compile(_sut.Parse("from search(\"\") where text contains \"bitcoin\"")).LocalPredicate!;
+
+        var searchAccepted = fixture.Where(searchPredicate).ToList();
+        var containsAccepted = fixture.Where(containsPredicate).ToList();
+
+        Assert.Equal(3, searchAccepted.Count); // everything but "no match here"
+        Assert.Equal(searchAccepted, containsAccepted);
     }
 
     [Fact]
