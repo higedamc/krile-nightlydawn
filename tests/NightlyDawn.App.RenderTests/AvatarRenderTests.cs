@@ -252,7 +252,10 @@ public sealed class AvatarRenderTests
         public void Subscribe()
         {
             _tab.Subscribe();
-            Pump(() => !_tab.IsLoading, "the timeline stream never finished");
+            // `!X.IsLoading` alone cannot tell "never subscribed" from "finished" (plan §46/§50;
+            // WaitSoundnessTests demonstrates it) -- ANDing with `Status != IdleStatus` closes the
+            // gap, since IdleStatus is the one value Subscribe() never leaves the tab in.
+            Pump(() => !_tab.IsLoading && _tab.Status != TimelineViewModel.IdleStatus, "the timeline stream never finished");
             Dispatcher.UIThread.RunJobs();
             Window.CaptureRenderedFrame(); // Realises the item containers so the row views exist and are attached.
             Dispatcher.UIThread.RunJobs();

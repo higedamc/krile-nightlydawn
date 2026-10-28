@@ -62,7 +62,10 @@ public sealed class MainWindowColumnRoutingTests
     {
         column.Query = "from home";
         column.Subscribe();
-        Pump(() => !column.IsLoading, "a column's timeline stream never finished loading");
+        // `!X.IsLoading` alone cannot tell "never subscribed" from "finished" (plan §46/§50;
+        // WaitSoundnessTests demonstrates it) -- ANDing with `Status != IdleStatus` closes the
+        // gap, since IdleStatus is the one value Subscribe() never leaves the column in.
+        Pump(() => !column.IsLoading && column.Status != TimelineViewModel.IdleStatus, "a column's timeline stream never finished loading");
     }
 
     private static void Pump(Func<bool> condition, string timeoutMessage)

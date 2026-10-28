@@ -230,7 +230,10 @@ public sealed class ThemeRenderTests
             var timeline = ((WorkspaceViewModel)Window.DataContext!).Columns[0].Tabs[0];
             timeline.Query = "from home";
             timeline.Subscribe();
-            Pump(() => !timeline.IsLoading, "the timeline stream never finished");
+            // `!X.IsLoading` alone cannot tell "never subscribed" from "finished" (plan §46/§50;
+            // WaitSoundnessTests demonstrates it) -- ANDing with `Status != IdleStatus` closes the
+            // gap, since IdleStatus is the one value Subscribe() never leaves the timeline in.
+            Pump(() => !timeline.IsLoading && timeline.Status != TimelineViewModel.IdleStatus, "the timeline stream never finished");
             Dispatcher.UIThread.RunJobs();
         }
 

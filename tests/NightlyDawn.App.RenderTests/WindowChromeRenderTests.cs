@@ -103,7 +103,12 @@ public sealed class WindowChromeRenderTests
 
         queryBox.Text = "from kind(\"1\")";
         session.Click(subscribeButton);
-        session.Pump(() => !tab.IsLoading, "subscribing through the opened QueryBox/SubscribeButton never finished");
+        // `!X.IsLoading` alone cannot tell "never subscribed" from "finished": IsLoading defaults to
+        // false, the same value it holds once a subscribe completes, so a tab whose click never landed
+        // would pass this wait instantly too (plan §46/§48/§50; WaitSoundnessTests demonstrates it).
+        // ANDing with `Status != IdleStatus` closes the gap -- IdleStatus is the one value Subscribe()
+        // never leaves the tab in.
+        session.Pump(() => !tab.IsLoading && tab.Status != TimelineViewModel.IdleStatus, "subscribing through the opened QueryBox/SubscribeButton never finished");
 
         Assert.Equal(["first", "second"], tab.Notes.Select(n => n.DisplayContent));
     }
@@ -243,7 +248,7 @@ public sealed class WindowChromeRenderTests
         var tab = ((WorkspaceViewModel)window.DataContext!).Columns[0].Tabs[0];
         tab.Query = "from kind(\"1\")";
         tab.Subscribe();
-        session.Pump(() => !tab.IsLoading, "the timeline stream never finished");
+        session.Pump(() => !tab.IsLoading && tab.Status != TimelineViewModel.IdleStatus, "the timeline stream never finished");
 
         Assert.Equal("2 notes", statusLine.Text);
     }

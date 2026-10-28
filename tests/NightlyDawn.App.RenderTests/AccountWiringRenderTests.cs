@@ -33,7 +33,12 @@ public sealed class AccountWiringRenderTests
 
         column.Query = "from home";
         column.Subscribe();
-        session.Pump(() => !column.IsLoading, "the anonymous attempt never finished failing");
+        // `!X.IsLoading` alone cannot tell "never subscribed" from "finished": IsLoading defaults to
+        // false, the same value it holds once a subscribe completes, so a column that never ran would
+        // pass this wait instantly too (plan §46/§50; WaitSoundnessTests demonstrates it). ANDing with
+        // `Status != IdleStatus` closes the gap -- IdleStatus is the one value Subscribe() never leaves
+        // the column in, success or failure.
+        session.Pump(() => !column.IsLoading && column.Status != TimelineViewModel.IdleStatus, "the anonymous attempt never finished failing");
 
         Assert.Equal("Could not open this timeline: 'from home' needs a signed-in account.", column.Status);
         Assert.True(column.NeedsAccountRetry);
@@ -42,7 +47,7 @@ public sealed class AccountWiringRenderTests
         Assert.Empty(session.Factory.AccountCalls); // Negative control: nothing claims to be account-bound before a key exists.
 
         session.GenerateKey();
-        session.Pump(() => !column.IsLoading, "the retried subscribe never finished");
+        session.Pump(() => !column.IsLoading && column.Status != TimelineViewModel.IdleStatus, "the retried subscribe never finished");
 
         Assert.Single(session.Factory.AccountCalls); // The retry used Create(), not a second CreateAnonymous() call.
         Assert.Equal(["account note"], column.Notes.Select(n => n.DisplayContent));
@@ -62,7 +67,7 @@ public sealed class AccountWiringRenderTests
 
         column.Query = "from kind(\"1\")";
         column.Subscribe();
-        session.Pump(() => !column.IsLoading, "the anonymous subscribe never finished");
+        session.Pump(() => !column.IsLoading && column.Status != TimelineViewModel.IdleStatus, "the anonymous subscribe never finished");
         Assert.Empty(column.Notes); // AccountGatedTimelineSourceFactory.CreateAnonymous returns no notes for anything but `from home`.
         Assert.False(column.NeedsAccountRetry);
 
@@ -82,7 +87,7 @@ public sealed class AccountWiringRenderTests
         var column = session.Column;
         column.Query = "from home";
         column.Subscribe();
-        session.Pump(() => !column.IsLoading, "the account-bound subscribe never finished");
+        session.Pump(() => !column.IsLoading && column.Status != TimelineViewModel.IdleStatus, "the account-bound subscribe never finished");
         Assert.True(column.IsAccountBound);
 
         session.Click(session.FindByContent<Button>("Lock"));
@@ -108,7 +113,7 @@ public sealed class AccountWiringRenderTests
         var indifferentColumn = session.Column;
         indifferentColumn.Query = "from kind(\"1\")";
         indifferentColumn.Subscribe();
-        session.Pump(() => !indifferentColumn.IsLoading, "the kind(1) subscribe never finished");
+        session.Pump(() => !indifferentColumn.IsLoading && indifferentColumn.Status != TimelineViewModel.IdleStatus, "the kind(1) subscribe never finished");
         Assert.False(indifferentColumn.IsAccountBound); // Create() ran, but the compiled query never needed the account.
         Assert.NotEmpty(indifferentColumn.Notes);
         var notesBeforeLock = indifferentColumn.Notes.ToList();
@@ -116,7 +121,7 @@ public sealed class AccountWiringRenderTests
         var homeColumn = session.AddColumn();
         homeColumn.Query = "from home";
         homeColumn.Subscribe();
-        session.Pump(() => !homeColumn.IsLoading, "the home subscribe never finished");
+        session.Pump(() => !homeColumn.IsLoading && homeColumn.Status != TimelineViewModel.IdleStatus, "the home subscribe never finished");
         Assert.True(homeColumn.IsAccountBound); // Negative control: a genuinely account-bound column, same session.
 
         session.Click(session.FindByContent<Button>("Lock"));
