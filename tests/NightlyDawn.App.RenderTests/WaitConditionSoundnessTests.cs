@@ -11,11 +11,17 @@ namespace NightlyDawn.App.RenderTests;
 /// <c>Subscribe()</c> never ran (or never landed -- the original bug was a button click that
 /// missed, plan §48) would satisfy that wait immediately, same as a tab that genuinely finished.
 /// Every call site in this project now ANDs an extra condition that is only true once
-/// <c>Subscribe()</c> has actually left the tab in a terminal state (commonly
-/// <c>Status != TimelineViewModel.IdleStatus</c>, which no code path ever restores once a subscribe
-/// attempt has run). This test encodes that acceptance bar mechanically -- scanning source text
-/// rather than driving a view model -- so a future call site copy-pasted from an old example cannot
-/// silently reintroduce the lone form.
+/// <c>Subscribe()</c> has actually left the tab in a terminal state. <c>Status !=
+/// TimelineViewModel.IdleStatus</c> is the common case, but it only proves a *first* Subscribe()
+/// ran -- Status is never reset, so it is already true before a resubscribe's own wait starts
+/// too, degrading back to the same lone-condition bug one level up (PR #50 review). A resubscribe
+/// needs either a positive condition true only once that specific attempt lands
+/// (<c>AccountWiringRenderTests.cs</c>'s retry uses <c>IsAccountBound</c>) or a <c>StreamCompletion</c>
+/// captured right after calling <c>Subscribe()</c>, which is a fresh <see cref="Task"/> instance
+/// each call (<c>AvatarRenderTests.cs</c>'s shared helper). This test encodes the mechanical half of
+/// that acceptance bar -- scanning source text rather than driving a view model -- so a future call
+/// site copy-pasted from an old example cannot silently reintroduce the lone form; the resubscribe
+/// distinction above is not something a regex can check and has to stay a review-time judgement.
 /// </summary>
 public sealed class WaitConditionSoundnessTests
 {
@@ -27,13 +33,19 @@ public sealed class WaitConditionSoundnessTests
         var renderTestsDir = SourceDirectory();
         var offenders = new List<string>();
 
-        foreach (var file in Directory.EnumerateFiles(renderTestsDir, "*.cs", SearchOption.TopDirectoryOnly))
+        foreach (var file in Directory.EnumerateFiles(renderTestsDir, "*.cs", SearchOption.AllDirectories))
         {
+            var relative = Path.GetRelativePath(renderTestsDir, file);
+            if (relative.Split(Path.DirectorySeparatorChar) is ["bin", ..] or ["obj", ..])
+            {
+                continue; // build output, not source.
+            }
+
             foreach (var (line, number) in File.ReadLines(file).Select((text, i) => (text, i + 1)))
             {
                 if (LoneIsLoadingWait.IsMatch(line))
                 {
-                    offenders.Add($"{Path.GetFileName(file)}:{number}: {line.Trim()}");
+                    offenders.Add($"{relative}:{number}: {line.Trim()}");
                 }
             }
         }

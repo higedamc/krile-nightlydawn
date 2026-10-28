@@ -89,8 +89,10 @@ public sealed class AuthorLabelRenderTests
             timeline.Query = "from home";
             timeline.Subscribe();
             // `!X.IsLoading` alone cannot tell "never subscribed" from "finished" (plan §46/§50;
-            // WaitSoundnessTests demonstrates it) -- ANDing with `Status != IdleStatus` closes the
-            // gap, since IdleStatus is the one value Subscribe() never leaves the timeline in.
+            // WaitConditionSoundnessTests demonstrates it). ANDing with `Status != IdleStatus` closes
+            // the gap for a *first* Subscribe() only -- Status is never reset, so it does NOT
+            // generalize to a resubscribe (use a positive condition, as AccountWiringRenderTests.cs's
+            // retry does, or a freshly captured StreamCompletion, as AvatarRenderTests.cs's helper does).
             Pump(() => !timeline.IsLoading && timeline.Status != TimelineViewModel.IdleStatus, "the timeline stream never finished");
             Dispatcher.UIThread.RunJobs();
         }

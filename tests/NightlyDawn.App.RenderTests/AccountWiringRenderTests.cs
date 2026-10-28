@@ -35,9 +35,13 @@ public sealed class AccountWiringRenderTests
         column.Subscribe();
         // `!X.IsLoading` alone cannot tell "never subscribed" from "finished": IsLoading defaults to
         // false, the same value it holds once a subscribe completes, so a column that never ran would
-        // pass this wait instantly too (plan §46/§50; WaitSoundnessTests demonstrates it). ANDing with
-        // `Status != IdleStatus` closes the gap -- IdleStatus is the one value Subscribe() never leaves
-        // the column in, success or failure.
+        // pass this wait instantly too (plan §46/§50; WaitConditionSoundnessTests demonstrates it).
+        // ANDing with `Status != IdleStatus` closes the gap for a *first* Subscribe() -- IdleStatus is
+        // the one value nothing else produces. It does NOT generalize to a resubscribe on the same
+        // column: Status is never reset, so the AND would already be true before the second
+        // Subscribe() does anything -- see this test's own retry a few lines down, which uses
+        // IsAccountBound instead, and AvatarRenderTests.cs's shared helper, which captures
+        // StreamCompletion right after calling Subscribe().
         session.Pump(() => !column.IsLoading && column.Status != TimelineViewModel.IdleStatus, "the anonymous attempt never finished failing");
 
         Assert.Equal("Could not open this timeline: 'from home' needs a signed-in account.", column.Status);
@@ -47,7 +51,13 @@ public sealed class AccountWiringRenderTests
         Assert.Empty(session.Factory.AccountCalls); // Negative control: nothing claims to be account-bound before a key exists.
 
         session.GenerateKey();
-        session.Pump(() => !column.IsLoading && column.Status != TimelineViewModel.IdleStatus, "the retried subscribe never finished");
+        // Status != IdleStatus is already true here -- it is still holding the first attempt's failure
+        // message, from before the retry's own Subscribe() runs. A resubscribe never resets Status, so
+        // that AND degrades back to the lone, unsound `!IsLoading` the moment it is reused across a
+        // second Subscribe() call on the same column (Lead review, PR #50). IsAccountBound is the
+        // positive condition this retry actually needs: false after the first attempt (asserted
+        // above), true only once the retry's Create() path has actually run (asserted just below).
+        session.Pump(() => !column.IsLoading && column.IsAccountBound, "the retried subscribe never finished");
 
         Assert.Single(session.Factory.AccountCalls); // The retry used Create(), not a second CreateAnonymous() call.
         Assert.Equal(["account note"], column.Notes.Select(n => n.DisplayContent));

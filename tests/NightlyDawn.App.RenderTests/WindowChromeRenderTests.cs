@@ -105,9 +105,12 @@ public sealed class WindowChromeRenderTests
         session.Click(subscribeButton);
         // `!X.IsLoading` alone cannot tell "never subscribed" from "finished": IsLoading defaults to
         // false, the same value it holds once a subscribe completes, so a tab whose click never landed
-        // would pass this wait instantly too (plan §46/§48/§50; WaitSoundnessTests demonstrates it).
-        // ANDing with `Status != IdleStatus` closes the gap -- IdleStatus is the one value Subscribe()
-        // never leaves the tab in.
+        // would pass this wait instantly too (plan §46/§48/§50; WaitConditionSoundnessTests
+        // demonstrates it). ANDing with `Status != IdleStatus` closes the gap for a *first*
+        // Subscribe() -- IdleStatus is the one value nothing else produces. It does NOT generalize to
+        // a resubscribe on the same tab: Status is never reset, so use a positive condition
+        // (AccountWiringRenderTests.cs's retry) or a freshly captured StreamCompletion
+        // (AvatarRenderTests.cs's helper) instead.
         session.Pump(() => !tab.IsLoading && tab.Status != TimelineViewModel.IdleStatus, "subscribing through the opened QueryBox/SubscribeButton never finished");
 
         Assert.Equal(["first", "second"], tab.Notes.Select(n => n.DisplayContent));
