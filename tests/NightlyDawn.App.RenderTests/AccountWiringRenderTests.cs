@@ -183,6 +183,10 @@ public sealed class AccountWiringRenderTests
         session.ImportKey(nsec, Passphrase);
 
         Assert.Equal(expectedPubkeyHex, FindByName<TextBlock>(session.Window, "PubkeyText")!.Text);
+        // Negative-control-sensitive: ImportBox.IsVisible defaults to true in the absence of any binding, so a
+        // dropped `_importBox.IsVisible = _keys.ShowGenerate;` line would still pass the assertion above the
+        // import -- only checking it again here, now that the state has moved past NoKey, would catch that.
+        Assert.False(importBox.IsVisible);
     }
 
     private static void SaveFrame(WriteableBitmap frame)
