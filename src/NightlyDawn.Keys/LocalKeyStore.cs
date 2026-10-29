@@ -107,6 +107,17 @@ public sealed class LocalKeyStore(IKeyFileStore fileStore) : IKeyStore
                 throw new FormatException("nsec1... did not decode to a 32-byte private key.");
             }
 
+            // 32 bytes is necessary but not sufficient: zero and values >= the curve order are not valid
+            // scalars, and SetActiveKey's ECPrivKey.Create would otherwise surface that as an ArgumentException
+            // (an NBitcoin internal, not one of this contract's documented exceptions — §63).
+            ECPrivKey? candidate = null;
+            if (!ECPrivKey.TryCreate(rawKey, out candidate))
+            {
+                throw new FormatException("nsec1... decoded to an invalid secp256k1 private key.");
+            }
+
+            candidate?.Dispose();
+
             // A key handed over as plaintext was, by definition, exposed outside this store before we ever
             // saw it — NIP-49 records that history rather than letting re-encryption launder it into
             // NotKnownInsecureHandling (plan §62.5).

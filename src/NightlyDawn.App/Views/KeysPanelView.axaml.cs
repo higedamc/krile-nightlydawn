@@ -68,8 +68,8 @@ public sealed partial class KeysPanelView : UserControl
         }
 
         _keyStatus.Text = _keys.Status;
-        _generateBox.IsVisible = _keys.ShowGenerate;
-        _importBox.IsVisible = _keys.ShowGenerate;
+        _generateBox.IsVisible = _keys.ShowGenerateForm;
+        _importBox.IsVisible = _keys.ShowImportForm;
         _unlockBox.IsVisible = _keys.ShowUnlock;
         _unlockedBox.IsVisible = _keys.ShowUnlocked;
         _exportBox.IsVisible = _keys.HasExport;
@@ -122,6 +122,10 @@ public sealed partial class KeysPanelView : UserControl
 
     private async void OnImportKeyClick(object? sender, RoutedEventArgs e) =>
         await WithPassphrasesAsync(_importKey, _importPassphrase, (k, p) => _keys!.ImportAsync(k, p));
+
+    private void OnSwitchToImportClick(object? sender, RoutedEventArgs e) => _keys!.SwitchToImportForm();
+
+    private void OnSwitchToGenerateClick(object? sender, RoutedEventArgs e) => _keys!.SwitchToGenerateForm();
 
     private async void OnUnlockClick(object? sender, RoutedEventArgs e) =>
         await WithPassphraseAsync(_unlockPassphrase, p => _keys!.UnlockAsync(p));

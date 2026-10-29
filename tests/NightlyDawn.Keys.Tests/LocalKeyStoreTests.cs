@@ -125,6 +125,18 @@ public class LocalKeyStoreTests : IDisposable
         await Assert.ThrowsAsync<FormatException>(() => store.ImportRawKeyAsync(shortPayload.AsMemory(), "pw".AsMemory()));
     }
 
+    /// <summary>All-zero is 32 bytes but not a valid secp256k1 scalar. Without the TryCreate check this
+    /// surfaces as NBitcoin's ArgumentException ("Invalid ec private key"), which is not one of the
+    /// exceptions <see cref="NightlyDawn.Core.IKeyStore.ImportRawKeyAsync"/> documents (§63).</summary>
+    [Fact]
+    public async Task ImportRawKeyAsync_RejectsAnOutOfRangeScalar()
+    {
+        var allZero = Bech32.Encode("nsec", new byte[32]);
+        var store = new LocalKeyStore(new FileKeyFileStore(_filePath));
+
+        await Assert.ThrowsAsync<FormatException>(() => store.ImportRawKeyAsync(allZero.AsMemory(), "pw".AsMemory()));
+    }
+
     /// <summary>Builds a valid <c>nsec1...</c> for a freshly generated secp256k1 key the same way
     /// <see cref="LocalKeyStore.GenerateLocalKeyAsync"/> does, plus the hex x-only pubkey it decodes to —
     /// there is no store API that returns a raw key, so tests needing one as input build it directly, exactly

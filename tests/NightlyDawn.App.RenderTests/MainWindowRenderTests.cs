@@ -49,6 +49,10 @@ public sealed class MainWindowRenderTests
         // default, visible and usable once opened) -- the thing this test still owns is that the column head
         // (TabStrip/AddTabButton) and everything else below render without clipping or overflow.
         AssertFitsInsideTheWindow(window, "KeysExpander");
+        // GenerateBox's row grew a "switch to Import" button in L15/§63; its own bounds-check catches that
+        // button overflowing the panel the way KeysExpander's check alone would not (KeysExpander can grow
+        // to fit an overflowing child without ever reporting that as "outside the window").
+        AssertFitsInsideTheWindow(window, "GenerateBox");
         AssertFitsInsideTheWindow(window, "TimelineList");
         AssertMinimumSize(window, "TimelineList", minWidth: 600, minHeight: 60);
         // The subtitle this used to check ("Type a query, press Subscribe...") was removed with the rest of
@@ -196,8 +200,9 @@ public sealed class MainWindowRenderTests
         root.GetVisualDescendants().OfType<T>().FirstOrDefault(c => c.Name == name);
 
     /// <summary>(b): the named control must be laid out entirely inside the window's DIP bounds, with a non-zero
-    /// size — catches the "control clipped/overlaps at this size" class of HiDPI/layout break.</summary>
-    private static void AssertFitsInsideTheWindow(MainWindow window, string controlName)
+    /// size — catches the "control clipped/overlaps at this size" class of HiDPI/layout break. Internal (not
+    /// private) so AccountWiringRenderTests can reuse it for the Import form's bounds (plan §63).</summary>
+    internal static void AssertFitsInsideTheWindow(MainWindow window, string controlName)
     {
         var control = FindByName<Control>(window, controlName) ?? throw new Xunit.Sdk.XunitException($"{controlName}: not found in the visual tree");
         var topLeft = control.TranslatePoint(new Point(0, 0), window) ?? throw new Xunit.Sdk.XunitException($"{controlName}: not attached to the window's visual tree");

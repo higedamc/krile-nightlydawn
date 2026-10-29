@@ -151,18 +151,28 @@ public sealed class AccountWiringRenderTests
         Assert.True(homeColumn.NeedsAccountRetry);
     }
 
-    /// <summary>L15 (plan §62.5): the Keys panel's "no key yet" state must offer more than Generate -- an
-    /// existing <c>nsec1…</c> has to come in and unlock the real panel through the real controls, the same way
-    /// <see cref="Session.GenerateKey"/> drives Generate above. The frame this saves is the "ガード" the plan
-    /// asks for: proof the Import box actually exists in the no-key state, not just that the view model has an
-    /// <c>ImportAsync</c> method.</summary>
+    /// <summary>L15 (plan §62.5), reworked per §63: the Keys panel's "no key yet" state must offer more than
+    /// Generate -- an existing <c>nsec1…</c> has to come in and unlock the real panel through the real
+    /// controls, the same way <see cref="Session.GenerateKey"/> drives Generate above. Generate and Import
+    /// share one vertical slot (switched by the real "Import an existing key instead" button), not two boxes
+    /// stacked at once -- that mutual exclusivity, not just the Import box's existence, is what §63 asked this
+    /// test to prove, since showing both at once is exactly what ate the timeline's floor in PR #53.</summary>
     [AvaloniaFact]
-    public void ImportBox_IsOfferedAlongsideGenerate_AndImportingAnNsecUnlocksTheRealPanel()
+    public void ImportBox_ReplacesGenerateInPlace_AndImportingAnNsecUnlocksTheRealPanel()
     {
         using var session = new Session();
 
+        var generateBox = FindByName<Control>(session.Window, "GenerateBox")!;
         var importBox = FindByName<Control>(session.Window, "ImportBox")!;
-        Assert.True(importBox.IsVisible); // offered together with Generate before any key exists (L15)
+        Assert.True(generateBox.IsVisible); // Generate is the default form in NoKey
+        Assert.False(importBox.IsVisible); // Import is not offered until asked for
+
+        session.Click(session.FindByContent<Button>("Import an existing key instead"));
+
+        // Switching forms replaces Generate with Import in the same slot -- never both visible together.
+        Assert.False(generateBox.IsVisible);
+        Assert.True(importBox.IsVisible);
+        MainWindowRenderTests.AssertFitsInsideTheWindow(session.Window, "ImportBox");
 
         var frame = session.Window.CaptureRenderedFrame();
         Assert.NotNull(frame);
@@ -184,8 +194,8 @@ public sealed class AccountWiringRenderTests
 
         Assert.Equal(expectedPubkeyHex, FindByName<TextBlock>(session.Window, "PubkeyText")!.Text);
         // Negative-control-sensitive: ImportBox.IsVisible defaults to true in the absence of any binding, so a
-        // dropped `_importBox.IsVisible = _keys.ShowGenerate;` line would still pass the assertion above the
-        // import -- only checking it again here, now that the state has moved past NoKey, would catch that.
+        // dropped `_importBox.IsVisible = _keys.ShowImportForm;` line would still pass the assertions above --
+        // only checking it again here, now that the state has moved past NoKey, would catch that.
         Assert.False(importBox.IsVisible);
     }
 

@@ -30,6 +30,8 @@ public class KeyPanelViewModelTests
         await vm.RefreshAsync();
         Assert.Equal(KeyPanelState.NoKey, vm.State);
         Assert.True(vm.ShowGenerate);
+        Assert.True(vm.ShowGenerateForm); // Generate is the default form within NoKey (§63)
+        Assert.False(vm.ShowImportForm);
 
         store.Stored = "ncryptsec1stored";
         await vm.RefreshAsync();
@@ -140,6 +142,49 @@ public class KeyPanelViewModelTests
         Assert.Equal(KeyPanelState.Unlocked, vm.State);
         Assert.Equal(store.Active!.Pubkey, vm.PubkeyHex);
         Assert.Contains("plain text", vm.Status);
+    }
+
+    /// <summary>A pasted ncryptsec often carries a leading space or trailing newline (e.g. from a terminal
+    /// or a password manager); bech32 has none, so this must not reach the decoder as part of the key (§63).</summary>
+    [Fact]
+    public async Task Import_TrimsAPastedNcryptsec()
+    {
+        var store = new FakeKeyStore();
+        var vm = New(store);
+        await vm.RefreshAsync();
+
+        await vm.ImportAsync(" ncryptsec1stored\n".AsMemory(), "pw".AsMemory());
+
+        Assert.Equal(KeyPanelState.Unlocked, vm.State);
+        Assert.Equal("ncryptsec1stored", store.Stored); // ImportLocalKeyAsync stores the argument verbatim
+    }
+
+    /// <summary>Same trim, the nsec path.</summary>
+    [Fact]
+    public async Task Import_TrimsAPastedNsec()
+    {
+        var store = new FakeKeyStore();
+        var vm = New(store);
+        await vm.RefreshAsync();
+
+        await vm.ImportAsync("\tnsec1raw ".AsMemory(), "pw".AsMemory());
+
+        Assert.Equal(KeyPanelState.Unlocked, vm.State);
+        Assert.Equal("ncryptsec1nsec1raw", store.Stored); // FakeKeyStore.ImportRawKeyAsync prefixes the (trimmed) nsec text
+    }
+
+    [Fact]
+    public async Task Import_WhitespaceOnlyKey_IsTreatedAsEmpty()
+    {
+        var store = new FakeKeyStore();
+        var vm = New(store);
+        await vm.RefreshAsync();
+
+        await vm.ImportAsync("   \n".AsMemory(), "pw".AsMemory());
+
+        Assert.Equal(0, store.Imports);
+        Assert.Equal(0, store.RawImports);
+        Assert.Contains("Enter a key", vm.Status);
     }
 
     [Fact]
@@ -291,8 +336,47 @@ public class KeyPanelViewModelTests
 
         Assert.Contains(nameof(KeyPanelViewModel.State), raised);
         Assert.Contains(nameof(KeyPanelViewModel.ShowGenerate), raised);
+        Assert.Contains(nameof(KeyPanelViewModel.ShowGenerateForm), raised);
+        Assert.Contains(nameof(KeyPanelViewModel.ShowImportForm), raised);
         Assert.Contains(nameof(KeyPanelViewModel.ShowUnlock), raised);
         Assert.Contains(nameof(KeyPanelViewModel.ShowUnlocked), raised);
+    }
+
+    /// <summary>Generate and Import share one slot in NoKey (plan §63): switching must hide the other form,
+    /// never show both, and must not be possible outside NoKey. Also covers the state resetting back to
+    /// Generate once NoKey is re-entered, so a stale Import form never reopens unprompted (e.g. after sign-out).</summary>
+    [Fact]
+    public async Task SwitchToImportForm_IsExclusiveWithGenerate_AndResetsWhenNoKeyIsReEntered()
+    {
+        var store = new FakeKeyStore();
+        var vm = New(store);
+        await vm.RefreshAsync();
+        Assert.True(vm.ShowGenerateForm);
+        Assert.False(vm.ShowImportForm);
+
+        vm.SwitchToImportForm();
+        Assert.False(vm.ShowGenerateForm);
+        Assert.True(vm.ShowImportForm);
+
+        vm.SwitchToImportForm(); // idempotent
+        Assert.True(vm.ShowImportForm);
+
+        vm.SwitchToGenerateForm();
+        Assert.True(vm.ShowGenerateForm);
+        Assert.False(vm.ShowImportForm);
+
+        // Switching outside NoKey (e.g. once a key is active) must be a no-op: there is nothing to show.
+        await vm.GenerateAsync("pw".AsMemory(), "pw".AsMemory());
+        Assert.Equal(KeyPanelState.Unlocked, vm.State);
+        vm.SwitchToImportForm();
+        Assert.False(vm.ShowImportForm);
+        Assert.False(vm.ShowGenerateForm);
+
+        await vm.SignOutAsync(); // arms
+        await vm.SignOutAsync(); // deletes, back to NoKey
+        Assert.Equal(KeyPanelState.NoKey, vm.State);
+        Assert.True(vm.ShowGenerateForm); // reset to the default form, not whatever was showing before
+        Assert.False(vm.ShowImportForm);
     }
 
     /// <summary>Scriptable IKeyStore: no crypto, counts which contract methods the panel touched.</summary>
