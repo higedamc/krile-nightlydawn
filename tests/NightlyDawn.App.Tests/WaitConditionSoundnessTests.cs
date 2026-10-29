@@ -21,7 +21,7 @@ namespace NightlyDawn.App.Tests;
 /// </summary>
 public sealed class WaitConditionSoundnessTests
 {
-    private static readonly Regex LoneIsLoadingWait = new(@"WaitUntil\(\(\)\s*=>\s*!\w+\.IsLoading\s*,", RegexOptions.Compiled);
+    private static readonly Regex LoneIsLoadingWait = new(@"WaitUntil\(\(\)\s*=>\s*!\w+\.IsLoading\s*[,)]", RegexOptions.Compiled);
 
     [Fact]
     public void NoAppTestWaitsOnIsLoadingAlone()

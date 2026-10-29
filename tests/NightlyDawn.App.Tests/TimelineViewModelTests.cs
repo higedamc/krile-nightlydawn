@@ -80,9 +80,8 @@ public class TimelineViewModelTests
         vm.Query = "from home";
         vm.Subscribe();
         await WaitUntil(() => vm.IsLoading, "the first stream started loading"); // Proves Subscribe() actually landed before we wait for it to clear below.
-        var firstStreamStartedLoading = true;
         first.Push(new InitialLoadComplete()); // Ends loading with an empty backlog; the note below arrives "live".
-        await WaitUntil(() => firstStreamStartedLoading && !vm.IsLoading, "first stream loaded");
+        await WaitUntil(() => vm.Status == "0 notes · live", "first stream loaded");
         first.Push(new NoteArrived(TestNotes.Make(1, createdAt: 100)));
         await WaitUntil(() => vm.Notes.Count == 1, "first note shown");
         var firstCompletion = vm.StreamCompletion;
