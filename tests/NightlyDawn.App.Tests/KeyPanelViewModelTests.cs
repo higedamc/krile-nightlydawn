@@ -88,6 +88,75 @@ public class KeyPanelViewModelTests
     }
 
     [Fact]
+    public async Task Import_RequiresAKeyAndAPassphrase_AndNeverGuessesWhichMethodToCall()
+    {
+        var store = new FakeKeyStore();
+        var vm = New(store);
+        await vm.RefreshAsync();
+
+        await vm.ImportAsync("".AsMemory(), "pw".AsMemory());
+        Assert.Equal(0, store.Imports);
+        Assert.Equal(0, store.RawImports);
+        Assert.Contains("Enter a key", vm.Status);
+
+        await vm.ImportAsync("ncryptsec1x".AsMemory(), "".AsMemory());
+        Assert.Equal(0, store.Imports);
+        Assert.Contains("Enter a passphrase", vm.Status);
+
+        await vm.ImportAsync("bunker://unsupported".AsMemory(), "pw".AsMemory());
+        Assert.Equal(0, store.Imports);
+        Assert.Equal(0, store.RawImports);
+        Assert.Contains("ncryptsec1", vm.Status);
+        Assert.Contains("nsec1", vm.Status);
+    }
+
+    [Fact]
+    public async Task Import_RoutesAnNcryptsecToImportLocalKeyAsync_NotTheRawPath()
+    {
+        var store = new FakeKeyStore();
+        var vm = New(store);
+        await vm.RefreshAsync();
+
+        await vm.ImportAsync("ncryptsec1stored".AsMemory(), "pw".AsMemory());
+
+        Assert.Equal(1, store.Imports);
+        Assert.Equal(0, store.RawImports);
+        Assert.Equal(KeyPanelState.Unlocked, vm.State);
+        Assert.Equal(store.Active!.Pubkey, vm.PubkeyHex);
+        Assert.DoesNotContain("plain text", vm.Status);
+    }
+
+    [Fact]
+    public async Task Import_RoutesAnNsecToImportRawKeyAsync_NotTheCiphertextPath()
+    {
+        var store = new FakeKeyStore();
+        var vm = New(store);
+        await vm.RefreshAsync();
+
+        await vm.ImportAsync("nsec1raw".AsMemory(), "new-pw".AsMemory());
+
+        Assert.Equal(0, store.Imports);
+        Assert.Equal(1, store.RawImports);
+        Assert.Equal(KeyPanelState.Unlocked, vm.State);
+        Assert.Equal(store.Active!.Pubkey, vm.PubkeyHex);
+        Assert.Contains("plain text", vm.Status);
+    }
+
+    [Fact]
+    public async Task Import_WrongPassphraseShowsTypeOnly()
+    {
+        var store = new FakeKeyStore { ImportThrows = new CryptographicException("MAC check failed: secret details") };
+        var vm = New(store);
+        await vm.RefreshAsync();
+
+        await vm.ImportAsync("ncryptsec1stored".AsMemory(), "wrong".AsMemory());
+
+        Assert.Equal(KeyPanelState.NoKey, vm.State);
+        Assert.Equal("Failed (CryptographicException).", vm.Status);
+        Assert.DoesNotContain("secret", vm.Status);
+    }
+
+    [Fact]
     public async Task Export_ShowsCiphertextOnly_AndClearWorks()
     {
         var store = new FakeKeyStore { Stored = "x", Active = new SignerDescriptor("cd".PadRight(64, '0'), SignerKind.Nip49Local) };
@@ -232,9 +301,11 @@ public class KeyPanelViewModelTests
         public string? Stored { get; set; }
         public SignerDescriptor? Active { get; set; }
         public Exception? UnlockThrows { get; set; }
+        public Exception? ImportThrows { get; set; }
         public int Generates { get; private set; }
         public int Unlocks { get; private set; }
         public int Imports { get; private set; }
+        public int RawImports { get; private set; }
         public int SignOuts { get; private set; }
         public int Locks { get; private set; }
         public int PassphraseCalls { get; private set; }
@@ -275,8 +346,27 @@ public class KeyPanelViewModelTests
         {
             PassphraseCalls++;
             Imports++;
+            if (ImportThrows is not null)
+            {
+                throw ImportThrows;
+            }
+
             Stored = nip49EncryptedKey;
             Active = new SignerDescriptor("56".PadRight(64, '0'), SignerKind.Nip49Local);
+            return Task.FromResult(Active);
+        }
+
+        public Task<SignerDescriptor> ImportRawKeyAsync(ReadOnlyMemory<char> nsec, ReadOnlyMemory<char> newPassphrase, CancellationToken cancellationToken = default)
+        {
+            PassphraseCalls++;
+            RawImports++;
+            if (ImportThrows is not null)
+            {
+                throw ImportThrows;
+            }
+
+            Stored = "ncryptsec1" + new string(nsec.Span);
+            Active = new SignerDescriptor("78".PadRight(64, '0'), SignerKind.Nip49Local);
             return Task.FromResult(Active);
         }
 

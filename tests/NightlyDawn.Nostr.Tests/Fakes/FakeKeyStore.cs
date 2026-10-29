@@ -40,6 +40,9 @@ internal sealed class FakeKeyStore : IKeyStore
     public Task<SignerDescriptor> ImportLocalKeyAsync(string nip49EncryptedKey, ReadOnlyMemory<char> passphrase, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException("NotePublisher never calls this.");
 
+    public Task<SignerDescriptor> ImportRawKeyAsync(ReadOnlyMemory<char> nsec, ReadOnlyMemory<char> newPassphrase, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("NotePublisher never calls this.");
+
     public Task<SignerDescriptor> GenerateLocalKeyAsync(ReadOnlyMemory<char> passphrase, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException("NotePublisher never calls this.");
 

@@ -202,6 +202,55 @@ public sealed class KeyPanelViewModel : INotifyPropertyChanged
         });
     }
 
+    /// <summary>Imports an existing key by sniffing its bech32 prefix: <c>ncryptsec1…</c> goes through
+    /// <see cref="IKeyStore.ImportLocalKeyAsync"/> (<paramref name="passphrase"/> decrypts it), <c>nsec1…</c>
+    /// goes through <see cref="IKeyStore.ImportRawKeyAsync"/> (<paramref name="passphrase"/> is instead the new
+    /// passphrase to encrypt it under). Scope: bech32 only, no NIP-07/NIP-46, no hex (plan §62.5).</summary>
+    public Task ImportAsync(ReadOnlyMemory<char> encodedKey, ReadOnlyMemory<char> passphrase, CancellationToken cancellationToken = default)
+    {
+        if (encodedKey.Length == 0)
+        {
+            Status = "Enter a key first.";
+            return Task.CompletedTask;
+        }
+
+        if (passphrase.Length == 0)
+        {
+            Status = "Enter a passphrase first.";
+            return Task.CompletedTask;
+        }
+
+        if (encodedKey.Span.StartsWith("ncryptsec1", StringComparison.OrdinalIgnoreCase))
+        {
+            var ncryptsec = new string(encodedKey.Span);
+            return RunAsync("Importing…", async store =>
+            {
+                var signer = await store.ImportLocalKeyAsync(ncryptsec, passphrase, cancellationToken).ConfigureAwait(false);
+                Post(() =>
+                {
+                    SetUnlocked(signer);
+                    Status = "Key imported and stored encrypted.";
+                });
+            });
+        }
+
+        if (encodedKey.Span.StartsWith("nsec1", StringComparison.OrdinalIgnoreCase))
+        {
+            return RunAsync("Importing…", async store =>
+            {
+                var signer = await store.ImportRawKeyAsync(encodedKey, passphrase, cancellationToken).ConfigureAwait(false);
+                Post(() =>
+                {
+                    SetUnlocked(signer);
+                    Status = "Key imported and stored encrypted. This key was in plain text before import, which NIP-49 records.";
+                });
+            });
+        }
+
+        Status = "Enter an ncryptsec1… or nsec1… key.";
+        return Task.CompletedTask;
+    }
+
     public Task UnlockAsync(ReadOnlyMemory<char> passphrase, CancellationToken cancellationToken = default)
     {
         if (passphrase.Length == 0)

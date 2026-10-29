@@ -61,6 +61,13 @@ public class FakeKeyStoreTests
             return Task.FromResult(new SignerDescriptor(_pubkey, SignerKind.Nip49Local));
         }
 
+        public Task<SignerDescriptor> ImportRawKeyAsync(ReadOnlyMemory<char> nsec, ReadOnlyMemory<char> newPassphrase, CancellationToken cancellationToken = default)
+        {
+            _ncryptsec = "ncryptsec1fakerawimport";
+            _pubkey = "fake-raw-imported-pubkey";
+            return Task.FromResult(new SignerDescriptor(_pubkey, SignerKind.Nip49Local));
+        }
+
         public Task<SignerDescriptor> GenerateLocalKeyAsync(ReadOnlyMemory<char> passphrase, CancellationToken cancellationToken = default)
         {
             // A real implementation draws from a CSPRNG and checks the secp256k1 valid range;

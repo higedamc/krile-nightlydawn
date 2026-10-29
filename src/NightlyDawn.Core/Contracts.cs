@@ -50,6 +50,19 @@ public interface IKeyStore
     /// <param name="passphrase">Used only to decrypt; never persisted (S2: scrubbable buffer rather than an immutable <see cref="string"/>).</param>
     Task<SignerDescriptor> ImportLocalKeyAsync(string nip49EncryptedKey, ReadOnlyMemory<char> passphrase, CancellationToken cancellationToken = default);
 
+    /// <summary>Imports a raw, unencrypted key — e.g. pasted as plain <c>nsec1...</c> text — and immediately
+    /// encrypts it NIP-49 before persisting; this store never writes a raw secret to disk. Unlike
+    /// <see cref="ImportLocalKeyAsync"/>, whose argument is already ciphertext, the key here was exposed in
+    /// the clear before this call, so the stored record's NIP-49 <c>KeySecurity</c> byte is recorded as
+    /// "known insecure handling" — the same history tracking <see cref="ImportLocalKeyAsync"/> preserves for
+    /// whatever an imported ciphertext already recorded, applied here because this call is the exposure event.</summary>
+    /// <param name="nsec">A NIP-19 <c>nsec1...</c> raw private key, held as a scrubbable buffer like
+    /// <paramref name="newPassphrase"/> rather than a <see cref="string"/> (S2) — this is the secret itself,
+    /// not ciphertext, so it gets at least the same care.</param>
+    /// <param name="newPassphrase">Encrypts the key at rest as NIP-49 <c>ncryptsec1</c>; never persisted itself.</param>
+    /// <exception cref="FormatException"><paramref name="nsec"/> is not a valid <c>nsec1...</c> string, or does not decode to a 32-byte key.</exception>
+    Task<SignerDescriptor> ImportRawKeyAsync(ReadOnlyMemory<char> nsec, ReadOnlyMemory<char> newPassphrase, CancellationToken cancellationToken = default);
+
     /// <summary>Generates a new local key — CSPRNG-sourced, with the secp256k1 valid-range check the implementation's responsibility — and stores it NIP-49-encrypted. Never returns the raw secret key; only <see cref="SignerDescriptor"/> (pubkey + metadata) (B11).</summary>
     /// <param name="passphrase">Encrypts the new key at rest as NIP-49 <c>ncryptsec1</c>; the passphrase itself is never persisted.</param>
     Task<SignerDescriptor> GenerateLocalKeyAsync(ReadOnlyMemory<char> passphrase, CancellationToken cancellationToken = default);
