@@ -52,9 +52,6 @@ public sealed class WorkspaceRenderTests
         Assert.True(workspaceBounds.Intersects(tabStripBounds),
             $"TabStrip {tabStripBounds} should now live inside Workspace {workspaceBounds} (plan §21.2's inversion moved it out of the header)");
 
-        // "PlatformInfo" is deliberately not in this list: it lives inside the collapsed-by-default "Platform
-        // check" Expander, which does not realize its content into the visual tree while collapsed -- neither
-        // MainWindowRenderTests asserts on it.
         foreach (var name in new[] { "ComposeBox", "KeysExpander" })
         {
             var sibling = FindByName<Control>(window, name) ?? throw new Xunit.Sdk.XunitException($"{name}: not found in the visual tree");

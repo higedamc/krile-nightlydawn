@@ -79,6 +79,23 @@ public sealed class MainWindowRenderTests
         Assert.NotNull(FindByName<Control>(session.Window, "KeysExpander"));
     }
 
+    /// <summary>Regression guard for L14 (plan §65): the Omarchy/Wayland spike panel's removal left all
+    /// 768 pre-existing tests green, which proved nothing was watching for it coming back. Checks both the
+    /// Expander (by its header text, since it never had an x:Name) and the clipboard probe it held.</summary>
+    [AvaloniaFact]
+    public void SpikePanel_IsGone_AndDoesNotReappear()
+    {
+        using var session = new RenderSession(1280, 800, 1.0);
+        var window = session.Window;
+
+        var spikeExpander = window.GetVisualDescendants().OfType<Expander>()
+            .FirstOrDefault(e => e.Header is string header && header.Contains("Platform check", StringComparison.Ordinal));
+        Assert.Null(spikeExpander);
+
+        Assert.Null(FindByName<Control>(window, "ClipboardProbe"));
+        Assert.Null(FindByName<Control>(window, "PlatformInfo"));
+    }
+
     /// <summary>Owns one headless window plus the fakes it was built with; loads the Keys panel (NoKey state,
     /// expanded) and a small deterministic timeline before the frame is captured.</summary>
     private sealed class RenderSession : IDisposable
