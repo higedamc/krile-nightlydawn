@@ -2,8 +2,10 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using NBitcoin.Secp256k1;
 using NightlyDawn.App.RenderTests.Fakes;
 using NightlyDawn.App.Timelines;
 using NightlyDawn.Core;
@@ -22,6 +24,8 @@ namespace NightlyDawn.App.RenderTests;
 /// </summary>
 public sealed class AccountWiringRenderTests
 {
+    public static readonly string OutputDirectory = Path.Combine(AppContext.BaseDirectory, "RenderFrames");
+
     private static readonly TimeSpan PumpTimeout = TimeSpan.FromSeconds(5);
     private const string Passphrase = "correct horse battery staple";
 
@@ -147,6 +151,60 @@ public sealed class AccountWiringRenderTests
         Assert.True(homeColumn.NeedsAccountRetry);
     }
 
+    /// <summary>L15 (plan §62.5), reworked per §63: the Keys panel's "no key yet" state must offer more than
+    /// Generate -- an existing <c>nsec1…</c> has to come in and unlock the real panel through the real
+    /// controls, the same way <see cref="Session.GenerateKey"/> drives Generate above. Generate and Import
+    /// share one vertical slot (switched by the real "Import an existing key instead" button), not two boxes
+    /// stacked at once -- that mutual exclusivity, not just the Import box's existence, is what §63 asked this
+    /// test to prove, since showing both at once is exactly what ate the timeline's floor in PR #53.</summary>
+    [AvaloniaFact]
+    public void ImportBox_ReplacesGenerateInPlace_AndImportingAnNsecUnlocksTheRealPanel()
+    {
+        using var session = new Session();
+
+        var generateBox = FindByName<Control>(session.Window, "GenerateBox")!;
+        var importBox = FindByName<Control>(session.Window, "ImportBox")!;
+        Assert.True(generateBox.IsVisible); // Generate is the default form in NoKey
+        Assert.False(importBox.IsVisible); // Import is not offered until asked for
+
+        session.Click(session.FindByContent<Button>("Import an existing key instead"));
+
+        // Switching forms replaces Generate with Import in the same slot -- never both visible together.
+        Assert.False(generateBox.IsVisible);
+        Assert.True(importBox.IsVisible);
+        MainWindowRenderTests.AssertFitsInsideTheWindow(session.Window, "ImportBox");
+
+        var frame = session.Window.CaptureRenderedFrame();
+        Assert.NotNull(frame);
+        SaveFrame(frame!);
+
+        var rawKey = new byte[32];
+        ECPrivKey? privKey = null;
+        while (privKey is null)
+        {
+            System.Security.Cryptography.RandomNumberGenerator.Fill(rawKey);
+            ECPrivKey.TryCreate(rawKey, out privKey);
+        }
+
+        var expectedPubkeyHex = Convert.ToHexString(privKey.CreateXOnlyPubKey().ToBytes()).ToLowerInvariant();
+        var nsec = Bech32.Encode("nsec", rawKey);
+        privKey.Dispose();
+
+        session.ImportKey(nsec, Passphrase);
+
+        Assert.Equal(expectedPubkeyHex, FindByName<TextBlock>(session.Window, "PubkeyText")!.Text);
+        // Negative-control-sensitive: ImportBox.IsVisible defaults to true in the absence of any binding, so a
+        // dropped `_importBox.IsVisible = _keys.ShowImportForm;` line would still pass the assertions above --
+        // only checking it again here, now that the state has moved past NoKey, would catch that.
+        Assert.False(importBox.IsVisible);
+    }
+
+    private static void SaveFrame(WriteableBitmap frame)
+    {
+        Directory.CreateDirectory(OutputDirectory);
+        frame.Save(Path.Combine(OutputDirectory, "accountwiring_import_900x600.png"), new PngBitmapEncoderOptions());
+    }
+
     /// <summary>Owns one headless window, a temp-dir-backed real <see cref="LocalKeyStore"/> (same construction
     /// as <c>MainWindowRenderTests</c>'s session -- the host builds a real one too), and the account-gated fake
     /// factory. Generates the key through the real <c>KeysPanelView</c> controls rather than calling
@@ -196,6 +254,16 @@ public sealed class AccountWiringRenderTests
             FindByName<TextBox>(Window, "GenerateConfirm")!.Text = Passphrase;
             Click(FindByContent<Button>("Generate key"));
             Pump(() => FindByName<Control>(Window, "UnlockedBox")?.IsVisible == true, "generating a key never reached Unlocked");
+        }
+
+        /// <summary>Drives the real Import controls -- the key and passphrase text boxes and the click --
+        /// the same way a user pasting an existing key does.</summary>
+        public void ImportKey(string key, string passphrase)
+        {
+            FindByName<TextBox>(Window, "ImportKey")!.Text = key;
+            FindByName<TextBox>(Window, "ImportPassphrase")!.Text = passphrase;
+            Click(FindByContent<Button>("Import key"));
+            Pump(() => FindByName<Control>(Window, "UnlockedBox")?.IsVisible == true, "importing a key never reached Unlocked");
         }
 
         public void Click(Button button)

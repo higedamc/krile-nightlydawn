@@ -89,6 +89,51 @@ public sealed class LocalKeyStore(IKeyFileStore fileStore) : IKeyStore
         }
     }
 
+    public async Task<SignerDescriptor> ImportRawKeyAsync(ReadOnlyMemory<char> nsec, ReadOnlyMemory<char> newPassphrase, CancellationToken cancellationToken = default)
+    {
+        // Bech32's public surface only accepts string (Lead's narrow-surface constraint on that type), so this
+        // nsec text is materialized into one short-lived string here — the same one-time exposure
+        // ImportLocalKeyAsync's ncryptsec argument already undergoes, except what comes out the other end is
+        // the raw secret rather than ciphertext, so it gets zeroed the moment decoding is done.
+        if (!Bech32.TryDecode("nsec", new string(nsec.Span), out var rawKey))
+        {
+            throw new FormatException("Not a valid nsec1... string.");
+        }
+
+        try
+        {
+            if (rawKey.Length != 32)
+            {
+                throw new FormatException("nsec1... did not decode to a 32-byte private key.");
+            }
+
+            // 32 bytes is necessary but not sufficient: zero and values >= the curve order are not valid
+            // scalars, and SetActiveKey's ECPrivKey.Create would otherwise surface that as an ArgumentException
+            // (an NBitcoin internal, not one of this contract's documented exceptions — §63).
+            ECPrivKey? candidate = null;
+            if (!ECPrivKey.TryCreate(rawKey, out candidate))
+            {
+                throw new FormatException("nsec1... decoded to an invalid secp256k1 private key.");
+            }
+
+            candidate?.Dispose();
+
+            // A key handed over as plaintext was, by definition, exposed outside this store before we ever
+            // saw it — NIP-49 records that history rather than letting re-encryption launder it into
+            // NotKnownInsecureHandling (plan §62.5).
+            var descriptor = SetActiveKey(rawKey, KeySecurity.KnownInsecureHandling);
+
+            var ncryptsec = EncryptActiveKey(newPassphrase, DefaultLogN);
+            await fileStore.WriteAsync(ncryptsec, cancellationToken).ConfigureAwait(false);
+
+            return descriptor;
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(rawKey); // SetActiveKey cloned it; this copy must not linger (B1).
+        }
+    }
+
     public async Task<SignerDescriptor> GenerateLocalKeyAsync(ReadOnlyMemory<char> passphrase, CancellationToken cancellationToken = default)
     {
         var rawKey = new byte[32];

@@ -6,14 +6,28 @@
     <StackPanel Spacing="8" Margin="0,8,0,0">
       <TextBlock x:Name="KeyStatus" TextWrapping="Wrap" Opacity="0.8" />
 
-      <!-- No key: generate -->
+      <!-- No key: generate. Mutually exclusive with ImportBox below: they share the same vertical slot,
+           so offering Import costs no extra height (plan §63). -->
       <StackPanel x:Name="GenerateBox" Spacing="6">
         <TextBlock Text="This passphrase is the only thing protecting the key. NIP-49 recommends never publishing an ncryptsec: a weak passphrase can be brute-forced (about 100 ms per guess at the default cost)."
                    TextWrapping="Wrap" Opacity="0.7" FontSize="12" />
         <StackPanel Orientation="Horizontal" Spacing="8">
-          <TextBox x:Name="GeneratePassphrase" Width="240" PasswordChar="●" PlaceholderText="Passphrase" />
-          <TextBox x:Name="GenerateConfirm" Width="240" PasswordChar="●" PlaceholderText="Repeat passphrase" />
+          <TextBox x:Name="GeneratePassphrase" Width="200" PasswordChar="●" PlaceholderText="Passphrase" />
+          <TextBox x:Name="GenerateConfirm" Width="200" PasswordChar="●" PlaceholderText="Repeat passphrase" />
           <Button Content="Generate key" Click="OnGenerateKeyClick" />
+          <Button x:Name="SwitchToImportButton" Content="Import an existing key instead" Click="OnSwitchToImportClick" />
+        </StackPanel>
+      </StackPanel>
+
+      <!-- No key: import an existing one instead -->
+      <StackPanel x:Name="ImportBox" Spacing="6">
+        <TextBlock Text="Paste an ncryptsec1… (with its own passphrase) or a raw nsec1… (pick a new passphrase to encrypt it with)."
+                   TextWrapping="Wrap" Opacity="0.7" FontSize="12" />
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <TextBox x:Name="ImportKey" Width="260" PasswordChar="●" PlaceholderText="ncryptsec1… or nsec1…" />
+          <TextBox x:Name="ImportPassphrase" Width="150" PasswordChar="●" PlaceholderText="Passphrase" />
+          <Button Content="Import key" Click="OnImportKeyClick" />
+          <Button x:Name="SwitchToGenerateButton" Content="Generate a new key instead" Click="OnSwitchToGenerateClick" />
         </StackPanel>
       </StackPanel>
 

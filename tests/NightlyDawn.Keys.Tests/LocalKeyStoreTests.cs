@@ -1,3 +1,4 @@
+using NBitcoin.Secp256k1;
 using NightlyDawn.Core;
 using NightlyDawn.Keys;
 using Xunit;
@@ -64,6 +65,95 @@ public class LocalKeyStoreTests : IDisposable
         var imported = await store.ImportLocalKeyAsync(exported, "export-pass".AsMemory());
 
         Assert.Equal(generated.Pubkey, imported.Pubkey);
+    }
+
+    [Fact]
+    public async Task ImportRawKeyAsync_RoundTrips_ToTheSameNsecsPubkey()
+    {
+        var (nsec, expectedPubkeyHex) = MakeNsec();
+        var store = new LocalKeyStore(new FileKeyFileStore(_filePath));
+
+        var imported = await store.ImportRawKeyAsync(nsec.AsMemory(), "a-new-passphrase".AsMemory());
+
+        Assert.Equal(expectedPubkeyHex, imported.Pubkey);
+        Assert.Equal(SignerKind.Nip49Local, imported.Kind);
+    }
+
+    [Fact]
+    public async Task ImportRawKeyAsync_PersistsAnNcryptsecThatUnlocksWithTheNewPassphrase()
+    {
+        var (nsec, expectedPubkeyHex) = MakeNsec();
+        var fileStore = new FileKeyFileStore(_filePath);
+        var store = new LocalKeyStore(fileStore);
+
+        await store.ImportRawKeyAsync(nsec.AsMemory(), "a-new-passphrase".AsMemory());
+        await store.LockAsync();
+
+        var unlocked = await store.UnlockStoredKeyAsync("a-new-passphrase".AsMemory());
+
+        Assert.Equal(expectedPubkeyHex, unlocked.Pubkey);
+    }
+
+    [Fact]
+    public async Task ImportRawKeyAsync_RecordsKnownInsecureHandling_UnlikeAFreshlyGeneratedKey()
+    {
+        var (nsec, _) = MakeNsec();
+        var fileStore = new FileKeyFileStore(_filePath);
+        var store = new LocalKeyStore(fileStore);
+
+        await store.ImportRawKeyAsync(nsec.AsMemory(), "pw".AsMemory());
+
+        var persisted = await fileStore.ReadAsync();
+        Assert.True(Bech32.TryDecode("ncryptsec", persisted!, out var payload));
+        Assert.Equal(KeySecurity.KnownInsecureHandling, Nip49KeyEncryption.ReadKeySecurity(payload));
+    }
+
+    [Fact]
+    public async Task ImportRawKeyAsync_RejectsAMalformedNsec()
+    {
+        var store = new LocalKeyStore(new FileKeyFileStore(_filePath));
+
+        await Assert.ThrowsAsync<FormatException>(() => store.ImportRawKeyAsync("not-an-nsec".AsMemory(), "pw".AsMemory()));
+    }
+
+    [Fact]
+    public async Task ImportRawKeyAsync_RejectsAWrongLengthPayload()
+    {
+        var shortPayload = Bech32.Encode("nsec", new byte[16]);
+        var store = new LocalKeyStore(new FileKeyFileStore(_filePath));
+
+        await Assert.ThrowsAsync<FormatException>(() => store.ImportRawKeyAsync(shortPayload.AsMemory(), "pw".AsMemory()));
+    }
+
+    /// <summary>All-zero is 32 bytes but not a valid secp256k1 scalar. Without the TryCreate check this
+    /// surfaces as NBitcoin's ArgumentException ("Invalid ec private key"), which is not one of the
+    /// exceptions <see cref="NightlyDawn.Core.IKeyStore.ImportRawKeyAsync"/> documents (§63).</summary>
+    [Fact]
+    public async Task ImportRawKeyAsync_RejectsAnOutOfRangeScalar()
+    {
+        var allZero = Bech32.Encode("nsec", new byte[32]);
+        var store = new LocalKeyStore(new FileKeyFileStore(_filePath));
+
+        await Assert.ThrowsAsync<FormatException>(() => store.ImportRawKeyAsync(allZero.AsMemory(), "pw".AsMemory()));
+    }
+
+    /// <summary>Builds a valid <c>nsec1...</c> for a freshly generated secp256k1 key the same way
+    /// <see cref="LocalKeyStore.GenerateLocalKeyAsync"/> does, plus the hex x-only pubkey it decodes to —
+    /// there is no store API that returns a raw key, so tests needing one as input build it directly, exactly
+    /// as a NIP-49-unaware tool producing a bare nsec would.</summary>
+    private static (string Nsec, string PubkeyHex) MakeNsec()
+    {
+        var rawKey = new byte[32];
+        ECPrivKey? privKey = null;
+        while (privKey is null)
+        {
+            System.Security.Cryptography.RandomNumberGenerator.Fill(rawKey);
+            ECPrivKey.TryCreate(rawKey, out privKey);
+        }
+
+        var pubkeyHex = Convert.ToHexString(privKey.CreateXOnlyPubKey().ToBytes()).ToLowerInvariant();
+        privKey.Dispose();
+        return (Bech32.Encode("nsec", rawKey), pubkeyHex);
     }
 
     [Fact]

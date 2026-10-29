@@ -32,6 +32,7 @@ public sealed class KeyPanelViewModel : INotifyPropertyChanged
     private readonly IKeyStore? _store;
     private readonly Action<Action> _postToUi;
     private KeyPanelState _state = KeyPanelState.Unavailable;
+    private bool _importFormActive;
     private string _status = string.Empty;
     private string? _pubkeyHex;
     private string? _exportedKey;
@@ -55,7 +56,16 @@ public sealed class KeyPanelViewModel : INotifyPropertyChanged
         {
             if (SetField(ref _state, value))
             {
+                if (value != KeyPanelState.NoKey)
+                {
+                    // Next time the panel lands back in NoKey (e.g. after a sign-out), start from Generate
+                    // again rather than reopening on whichever form was showing when it left.
+                    _importFormActive = false;
+                }
+
                 Raise(nameof(ShowGenerate));
+                Raise(nameof(ShowGenerateForm));
+                Raise(nameof(ShowImportForm));
                 Raise(nameof(ShowUnlock));
                 Raise(nameof(ShowUnlocked));
             }
@@ -131,6 +141,12 @@ public sealed class KeyPanelViewModel : INotifyPropertyChanged
 
     public bool ShowGenerate => State == KeyPanelState.NoKey;
 
+    /// <summary>NoKey has two mutually exclusive forms (Generate / Import); this is the Generate one, the
+    /// default. See <see cref="ShowImportForm"/> and <see cref="SwitchToImportForm"/> (plan §63).</summary>
+    public bool ShowGenerateForm => State == KeyPanelState.NoKey && !_importFormActive;
+
+    public bool ShowImportForm => State == KeyPanelState.NoKey && _importFormActive;
+
     public bool ShowUnlock => State == KeyPanelState.Locked;
 
     public bool ShowUnlocked => State == KeyPanelState.Unlocked;
@@ -200,6 +216,60 @@ public sealed class KeyPanelViewModel : INotifyPropertyChanged
                 Status = "Key generated and stored encrypted. Keep the passphrase: there is no recovery without it.";
             });
         });
+    }
+
+    /// <summary>Imports an existing key by sniffing its bech32 prefix: <c>ncryptsec1…</c> goes through
+    /// <see cref="IKeyStore.ImportLocalKeyAsync"/> (<paramref name="passphrase"/> decrypts it), <c>nsec1…</c>
+    /// goes through <see cref="IKeyStore.ImportRawKeyAsync"/> (<paramref name="passphrase"/> is instead the new
+    /// passphrase to encrypt it under). Scope: bech32 only, no NIP-07/NIP-46, no hex (plan §62.5).</summary>
+    public Task ImportAsync(ReadOnlyMemory<char> encodedKey, ReadOnlyMemory<char> passphrase, CancellationToken cancellationToken = default)
+    {
+        // bech32 has no whitespace, so a pasted trailing newline or leading space can only ever break
+        // decoding; trim it here rather than making the user notice and retype (§63). The passphrase is
+        // never trimmed -- unlike the key, it is not bech32 and a leading/trailing space could be part of it.
+        encodedKey = encodedKey.Trim();
+
+        if (encodedKey.Length == 0)
+        {
+            Status = "Enter a key first.";
+            return Task.CompletedTask;
+        }
+
+        if (passphrase.Length == 0)
+        {
+            Status = "Enter a passphrase first.";
+            return Task.CompletedTask;
+        }
+
+        if (encodedKey.Span.StartsWith("ncryptsec1", StringComparison.OrdinalIgnoreCase))
+        {
+            var ncryptsec = new string(encodedKey.Span);
+            return RunAsync("Importing…", async store =>
+            {
+                var signer = await store.ImportLocalKeyAsync(ncryptsec, passphrase, cancellationToken).ConfigureAwait(false);
+                Post(() =>
+                {
+                    SetUnlocked(signer);
+                    Status = "Key imported and stored encrypted.";
+                });
+            });
+        }
+
+        if (encodedKey.Span.StartsWith("nsec1", StringComparison.OrdinalIgnoreCase))
+        {
+            return RunAsync("Importing…", async store =>
+            {
+                var signer = await store.ImportRawKeyAsync(encodedKey, passphrase, cancellationToken).ConfigureAwait(false);
+                Post(() =>
+                {
+                    SetUnlocked(signer);
+                    Status = "Key imported and stored encrypted. This key was in plain text before import, which NIP-49 records.";
+                });
+            });
+        }
+
+        Status = "Enter an ncryptsec1… or nsec1… key.";
+        return Task.CompletedTask;
     }
 
     public Task UnlockAsync(ReadOnlyMemory<char> passphrase, CancellationToken cancellationToken = default)
@@ -295,6 +365,28 @@ public sealed class KeyPanelViewModel : INotifyPropertyChanged
     {
         SignOutArmed = false;
         ExportedKey = null;
+    }
+
+    /// <summary>Switches the NoKey state's form in place -- Generate and Import occupy the same slot in the
+    /// panel, never both at once, so offering Import costs no extra vertical space (plan §63).</summary>
+    public void SwitchToImportForm()
+    {
+        if (State == KeyPanelState.NoKey && !_importFormActive)
+        {
+            _importFormActive = true;
+            Raise(nameof(ShowGenerateForm));
+            Raise(nameof(ShowImportForm));
+        }
+    }
+
+    public void SwitchToGenerateForm()
+    {
+        if (State == KeyPanelState.NoKey && _importFormActive)
+        {
+            _importFormActive = false;
+            Raise(nameof(ShowGenerateForm));
+            Raise(nameof(ShowImportForm));
+        }
     }
 
     private async Task RunAsync(string busyStatus, Func<IKeyStore, Task> action)

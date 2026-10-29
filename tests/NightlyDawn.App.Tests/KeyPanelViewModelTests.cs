@@ -30,6 +30,8 @@ public class KeyPanelViewModelTests
         await vm.RefreshAsync();
         Assert.Equal(KeyPanelState.NoKey, vm.State);
         Assert.True(vm.ShowGenerate);
+        Assert.True(vm.ShowGenerateForm); // Generate is the default form within NoKey (§63)
+        Assert.False(vm.ShowImportForm);
 
         store.Stored = "ncryptsec1stored";
         await vm.RefreshAsync();
@@ -85,6 +87,118 @@ public class KeyPanelViewModelTests
         await vm.UnlockAsync("right".AsMemory());
         Assert.Equal(KeyPanelState.Unlocked, vm.State);
         Assert.Equal(2, store.Unlocks); // the failed attempt and the successful one both went through UnlockStoredKeyAsync
+    }
+
+    [Fact]
+    public async Task Import_RequiresAKeyAndAPassphrase_AndNeverGuessesWhichMethodToCall()
+    {
+        var store = new FakeKeyStore();
+        var vm = New(store);
+        await vm.RefreshAsync();
+
+        await vm.ImportAsync("".AsMemory(), "pw".AsMemory());
+        Assert.Equal(0, store.Imports);
+        Assert.Equal(0, store.RawImports);
+        Assert.Contains("Enter a key", vm.Status);
+
+        await vm.ImportAsync("ncryptsec1x".AsMemory(), "".AsMemory());
+        Assert.Equal(0, store.Imports);
+        Assert.Contains("Enter a passphrase", vm.Status);
+
+        await vm.ImportAsync("bunker://unsupported".AsMemory(), "pw".AsMemory());
+        Assert.Equal(0, store.Imports);
+        Assert.Equal(0, store.RawImports);
+        Assert.Contains("ncryptsec1", vm.Status);
+        Assert.Contains("nsec1", vm.Status);
+    }
+
+    [Fact]
+    public async Task Import_RoutesAnNcryptsecToImportLocalKeyAsync_NotTheRawPath()
+    {
+        var store = new FakeKeyStore();
+        var vm = New(store);
+        await vm.RefreshAsync();
+
+        await vm.ImportAsync("ncryptsec1stored".AsMemory(), "pw".AsMemory());
+
+        Assert.Equal(1, store.Imports);
+        Assert.Equal(0, store.RawImports);
+        Assert.Equal(KeyPanelState.Unlocked, vm.State);
+        Assert.Equal(store.Active!.Pubkey, vm.PubkeyHex);
+        Assert.DoesNotContain("plain text", vm.Status);
+    }
+
+    [Fact]
+    public async Task Import_RoutesAnNsecToImportRawKeyAsync_NotTheCiphertextPath()
+    {
+        var store = new FakeKeyStore();
+        var vm = New(store);
+        await vm.RefreshAsync();
+
+        await vm.ImportAsync("nsec1raw".AsMemory(), "new-pw".AsMemory());
+
+        Assert.Equal(0, store.Imports);
+        Assert.Equal(1, store.RawImports);
+        Assert.Equal(KeyPanelState.Unlocked, vm.State);
+        Assert.Equal(store.Active!.Pubkey, vm.PubkeyHex);
+        Assert.Contains("plain text", vm.Status);
+    }
+
+    /// <summary>A pasted ncryptsec often carries a leading space or trailing newline (e.g. from a terminal
+    /// or a password manager); bech32 has none, so this must not reach the decoder as part of the key (§63).</summary>
+    [Fact]
+    public async Task Import_TrimsAPastedNcryptsec()
+    {
+        var store = new FakeKeyStore();
+        var vm = New(store);
+        await vm.RefreshAsync();
+
+        await vm.ImportAsync(" ncryptsec1stored\n".AsMemory(), "pw".AsMemory());
+
+        Assert.Equal(KeyPanelState.Unlocked, vm.State);
+        Assert.Equal("ncryptsec1stored", store.Stored); // ImportLocalKeyAsync stores the argument verbatim
+    }
+
+    /// <summary>Same trim, the nsec path.</summary>
+    [Fact]
+    public async Task Import_TrimsAPastedNsec()
+    {
+        var store = new FakeKeyStore();
+        var vm = New(store);
+        await vm.RefreshAsync();
+
+        await vm.ImportAsync("\tnsec1raw ".AsMemory(), "pw".AsMemory());
+
+        Assert.Equal(KeyPanelState.Unlocked, vm.State);
+        Assert.Equal("ncryptsec1nsec1raw", store.Stored); // FakeKeyStore.ImportRawKeyAsync prefixes the (trimmed) nsec text
+    }
+
+    [Fact]
+    public async Task Import_WhitespaceOnlyKey_IsTreatedAsEmpty()
+    {
+        var store = new FakeKeyStore();
+        var vm = New(store);
+        await vm.RefreshAsync();
+
+        await vm.ImportAsync("   \n".AsMemory(), "pw".AsMemory());
+
+        Assert.Equal(0, store.Imports);
+        Assert.Equal(0, store.RawImports);
+        Assert.Contains("Enter a key", vm.Status);
+    }
+
+    [Fact]
+    public async Task Import_WrongPassphraseShowsTypeOnly()
+    {
+        var store = new FakeKeyStore { ImportThrows = new CryptographicException("MAC check failed: secret details") };
+        var vm = New(store);
+        await vm.RefreshAsync();
+
+        await vm.ImportAsync("ncryptsec1stored".AsMemory(), "wrong".AsMemory());
+
+        Assert.Equal(KeyPanelState.NoKey, vm.State);
+        Assert.Equal("Failed (CryptographicException).", vm.Status);
+        Assert.DoesNotContain("secret", vm.Status);
     }
 
     [Fact]
@@ -222,8 +336,47 @@ public class KeyPanelViewModelTests
 
         Assert.Contains(nameof(KeyPanelViewModel.State), raised);
         Assert.Contains(nameof(KeyPanelViewModel.ShowGenerate), raised);
+        Assert.Contains(nameof(KeyPanelViewModel.ShowGenerateForm), raised);
+        Assert.Contains(nameof(KeyPanelViewModel.ShowImportForm), raised);
         Assert.Contains(nameof(KeyPanelViewModel.ShowUnlock), raised);
         Assert.Contains(nameof(KeyPanelViewModel.ShowUnlocked), raised);
+    }
+
+    /// <summary>Generate and Import share one slot in NoKey (plan §63): switching must hide the other form,
+    /// never show both, and must not be possible outside NoKey. Also covers the state resetting back to
+    /// Generate once NoKey is re-entered, so a stale Import form never reopens unprompted (e.g. after sign-out).</summary>
+    [Fact]
+    public async Task SwitchToImportForm_IsExclusiveWithGenerate_AndResetsWhenNoKeyIsReEntered()
+    {
+        var store = new FakeKeyStore();
+        var vm = New(store);
+        await vm.RefreshAsync();
+        Assert.True(vm.ShowGenerateForm);
+        Assert.False(vm.ShowImportForm);
+
+        vm.SwitchToImportForm();
+        Assert.False(vm.ShowGenerateForm);
+        Assert.True(vm.ShowImportForm);
+
+        vm.SwitchToImportForm(); // idempotent
+        Assert.True(vm.ShowImportForm);
+
+        vm.SwitchToGenerateForm();
+        Assert.True(vm.ShowGenerateForm);
+        Assert.False(vm.ShowImportForm);
+
+        // Switching outside NoKey (e.g. once a key is active) must be a no-op: there is nothing to show.
+        await vm.GenerateAsync("pw".AsMemory(), "pw".AsMemory());
+        Assert.Equal(KeyPanelState.Unlocked, vm.State);
+        vm.SwitchToImportForm();
+        Assert.False(vm.ShowImportForm);
+        Assert.False(vm.ShowGenerateForm);
+
+        await vm.SignOutAsync(); // arms
+        await vm.SignOutAsync(); // deletes, back to NoKey
+        Assert.Equal(KeyPanelState.NoKey, vm.State);
+        Assert.True(vm.ShowGenerateForm); // reset to the default form, not whatever was showing before
+        Assert.False(vm.ShowImportForm);
     }
 
     /// <summary>Scriptable IKeyStore: no crypto, counts which contract methods the panel touched.</summary>
@@ -232,9 +385,11 @@ public class KeyPanelViewModelTests
         public string? Stored { get; set; }
         public SignerDescriptor? Active { get; set; }
         public Exception? UnlockThrows { get; set; }
+        public Exception? ImportThrows { get; set; }
         public int Generates { get; private set; }
         public int Unlocks { get; private set; }
         public int Imports { get; private set; }
+        public int RawImports { get; private set; }
         public int SignOuts { get; private set; }
         public int Locks { get; private set; }
         public int PassphraseCalls { get; private set; }
@@ -275,8 +430,27 @@ public class KeyPanelViewModelTests
         {
             PassphraseCalls++;
             Imports++;
+            if (ImportThrows is not null)
+            {
+                throw ImportThrows;
+            }
+
             Stored = nip49EncryptedKey;
             Active = new SignerDescriptor("56".PadRight(64, '0'), SignerKind.Nip49Local);
+            return Task.FromResult(Active);
+        }
+
+        public Task<SignerDescriptor> ImportRawKeyAsync(ReadOnlyMemory<char> nsec, ReadOnlyMemory<char> newPassphrase, CancellationToken cancellationToken = default)
+        {
+            PassphraseCalls++;
+            RawImports++;
+            if (ImportThrows is not null)
+            {
+                throw ImportThrows;
+            }
+
+            Stored = "ncryptsec1" + new string(nsec.Span);
+            Active = new SignerDescriptor("78".PadRight(64, '0'), SignerKind.Nip49Local);
             return Task.FromResult(Active);
         }
 
