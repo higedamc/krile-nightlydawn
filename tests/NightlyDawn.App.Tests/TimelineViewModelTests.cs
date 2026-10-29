@@ -41,7 +41,7 @@ public class TimelineViewModelTests
         Assert.True(vm.IsLoading); // Notes alone do not end "loading" (B6): the backlog is not known to be complete.
 
         source.Push(new InitialLoadComplete());
-        await WaitUntil(() => !vm.IsLoading, "loading cleared");
+        await WaitUntil(() => vm.Notes.Count == 3 && !vm.IsLoading, "loading cleared");
         Assert.Equal(["note 2", "note 3", "note 1"], vm.Notes.Select(n => n.DisplayContent)); // Newest first.
         Assert.Equal("3 notes · live", vm.Status);
 
@@ -79,8 +79,9 @@ public class TimelineViewModelTests
 
         vm.Query = "from home";
         vm.Subscribe();
+        await WaitUntil(() => vm.IsLoading, "the first stream started loading"); // Proves Subscribe() actually landed before we wait for it to clear below.
         first.Push(new InitialLoadComplete()); // Ends loading with an empty backlog; the note below arrives "live".
-        await WaitUntil(() => !vm.IsLoading, "first stream loaded");
+        await WaitUntil(() => vm.Status == "0 notes · live", "first stream loaded");
         first.Push(new NoteArrived(TestNotes.Make(1, createdAt: 100)));
         await WaitUntil(() => vm.Notes.Count == 1, "first note shown");
         var firstCompletion = vm.StreamCompletion;
@@ -103,7 +104,7 @@ public class TimelineViewModelTests
 
         second.Push(new NoteArrived(TestNotes.Make(3, createdAt: 300)));
         second.Push(new InitialLoadComplete());
-        await WaitUntil(() => !vm.IsLoading, "second stream loaded");
+        await WaitUntil(() => vm.Notes.Count == 1 && !vm.IsLoading, "second stream loaded");
         Assert.Equal(["note 3"], vm.Notes.Select(n => n.DisplayContent));
 
         second.Complete();

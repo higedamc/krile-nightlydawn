@@ -37,7 +37,7 @@ public class SearchFlipViewModelPinTests
         originalSource.Push(new NoteArrived(TestNotes.Make(2, 200, content: "beta two")));
         originalSource.Push(new NoteArrived(TestNotes.Make(3, 300, content: "alpha gamma")));
         originalSource.Push(new InitialLoadComplete());
-        await WaitUntil(() => !original.IsLoading, "original tab finished its initial load");
+        await WaitUntil(() => original.Notes.Count == 3 && !original.IsLoading, "original tab finished its initial load");
 
         search.Open();
         search.Text = "alpha -gamma"; // As-you-type commits in CurrentTab mode (plan §37.2 item 4).
@@ -86,7 +86,7 @@ public class SearchFlipViewModelPinTests
         originalSource.Push(new NoteArrived(TestNotes.Make(1, 100, content: "Bitcoin is fine")));
         originalSource.Push(new NoteArrived(TestNotes.Make(2, 200, content: "bitcoin lowercase")));
         originalSource.Push(new InitialLoadComplete());
-        await WaitUntil(() => !original.IsLoading, "original tab finished its initial load");
+        await WaitUntil(() => original.Notes.Count == 2 && !original.IsLoading, "original tab finished its initial load");
 
         search.Open();
         search.Text = "bitcoin";
@@ -148,7 +148,7 @@ public class SearchFlipViewModelPinTests
         original.Subscribe();
         originalSource.Push(new NoteArrived(TestNotes.Make(1, 100, content: "alpha one")));
         originalSource.Push(new InitialLoadComplete());
-        await WaitUntil(() => !original.IsLoading, "original tab finished its initial load");
+        await WaitUntil(() => original.Notes.Count == 1 && !original.IsLoading, "original tab finished its initial load");
 
         search.Open();
         search.Text = "alpha";
