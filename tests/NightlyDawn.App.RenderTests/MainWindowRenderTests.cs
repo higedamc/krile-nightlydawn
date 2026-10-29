@@ -8,6 +8,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using NightlyDawn.App.RenderTests.Fakes;
 using NightlyDawn.App.Timelines;
+using NightlyDawn.App.Views;
 using NightlyDawn.Core;
 using NightlyDawn.Keys;
 using Xunit;
@@ -77,6 +78,56 @@ public sealed class MainWindowRenderTests
         Assert.Null(FindByName<Control>(session.Window, "QueryBoxTypoDoesNotExist"));
         Assert.NotNull(FindByName<Control>(session.Window, "SettingsToggle"));
         Assert.NotNull(FindByName<Control>(session.Window, "KeysExpander"));
+    }
+
+    /// <summary>Regression guard for L14 (plan §65): the Omarchy/Wayland spike panel's removal left all
+    /// 768 pre-existing tests green, which proved nothing was watching for it coming back. Checks both the
+    /// Expander (by its header text, since it never had an x:Name) and the clipboard probe it held.</summary>
+    [AvaloniaFact]
+    public void SpikePanel_IsGone_AndDoesNotReappear()
+    {
+        using var session = new RenderSession(1280, 800, 1.0);
+        var window = session.Window;
+
+        var spikeExpander = window.GetVisualDescendants().OfType<Expander>()
+            .FirstOrDefault(e => e.Header is string header && header.Contains("Platform check", StringComparison.Ordinal));
+        Assert.Null(spikeExpander);
+
+        Assert.Null(FindByName<Control>(window, "ClipboardProbe"));
+        Assert.Null(FindByName<Control>(window, "PlatformInfo"));
+    }
+
+    /// <summary>Structural guard for the L14 review (plan §66): a docked row anywhere in the root
+    /// <c>DockPanel</c> steals from the same fill slot <c>TimelineList</c> sits in (§63/§65), no matter what
+    /// text its header carries -- <see cref="SpikePanel_IsGone_AndDoesNotReappear"/> only catches a specific
+    /// header string and a realized <c>ClipboardProbe</c>/<c>PlatformInfo</c>, so a collapsed row with a
+    /// different header (or any other new docked child) would not realize those controls and would pass that
+    /// test while still eating the budget. Pinning the root's children by exact type, <c>Name</c>, and order
+    /// turns any new or reordered row red here regardless of its header text or collapsed state.</summary>
+    [AvaloniaFact]
+    public void RootDockPanel_HasExactlyTheKnownChildren_NoNewDockedRowStealsTheFillSlot()
+    {
+        using var session = new RenderSession(1280, 800, 1.0);
+        var window = session.Window;
+
+        var root = Assert.IsType<DockPanel>(window.Content);
+        var children = root.Children;
+
+        Assert.True(children.Count == 5,
+            $"root DockPanel has {children.Count} children, not the 5 known rows -- a new or removed docked " +
+            "row changes how much DIP the fill slot (Panel -> Workspace -> TimelineList) gets (§63/§65).");
+
+        AssertChild(children[0], typeof(DockPanel), name: null);
+        AssertChild(children[1], typeof(TextBlock), name: null);
+        AssertChild(children[2], typeof(TextBlock), name: "StatusLine");
+        AssertChild(children[3], typeof(KeysPanelView), name: "KeysPanel");
+        AssertChild(children[4], typeof(Panel), name: null);
+    }
+
+    private static void AssertChild(Control child, Type expectedType, string? name)
+    {
+        Assert.Equal(expectedType, child.GetType());
+        Assert.Equal(name, child.Name);
     }
 
     /// <summary>Owns one headless window plus the fakes it was built with; loads the Keys panel (NoKey state,

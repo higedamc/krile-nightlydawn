@@ -3,8 +3,6 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Input.Platform;
-using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
@@ -22,9 +20,6 @@ namespace NightlyDawn.App;
 
 public sealed partial class MainWindow : Window
 {
-    private readonly TextBlock _platformInfo;
-    private readonly TextBox _clipboardProbe;
-    private readonly TextBlock _clipboardStatus;
     private readonly ComposeViewModel _compose;
     private readonly WorkspaceViewModel _workspace;
     private readonly KeyPanelViewModel _keys;
@@ -44,9 +39,6 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         AvaloniaXamlLoader.Load(this);
-        _platformInfo = this.FindControl<TextBlock>("PlatformInfo")!;
-        _clipboardProbe = this.FindControl<TextBox>("ClipboardProbe")!;
-        _clipboardStatus = this.FindControl<TextBlock>("ClipboardStatus")!;
 
         // Compose box: built before the workspace below, since each column's actionsFactory (plan §10.1-2)
         // needs a compose view model to hand Reply/Quote targets to. Reaches _workspace back through a Func
@@ -214,7 +206,7 @@ public sealed partial class MainWindow : Window
 
     private void OnOpened(object? sender, EventArgs e)
     {
-        _platformInfo.Text = DescribePlatform();
+        Console.Error.WriteLine($"[NightlyDawn] platform:\n{DescribePlatform()}");
         _ = _keys.RefreshAsync(); // fire-and-forget: results arrive through PropertyChanged on the UI thread
 
         // Spike helper: when the host set a screenshot path (from NIGHTLYDAWN_SCREENSHOT), render the window
@@ -268,52 +260,5 @@ public sealed partial class MainWindow : Window
             $"NIGHTLYDAWN_BACKEND       : {backendOverride ?? "(unset = detect)"}",
             $"Render scaling: {RenderScaling:0.##}  Screen: {screen?.Bounds.Width}x{screen?.Bounds.Height} @ {screen?.Scaling:0.##}",
             $"Window (DIP) : {Bounds.Width:0}x{Bounds.Height:0}");
-    }
-
-    // Both handlers are `async void` (event handlers), so an unhandled exception would take the
-    // process down. This window exists to *report* platform failures, so every clipboard error is
-    // caught and shown in the status line instead — the Wayland backend is new upstream code.
-    private async void OnCopyClick(object? sender, RoutedEventArgs e)
-    {
-        try
-        {
-            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
-            if (clipboard is null)
-            {
-                _clipboardStatus.Text = "Clipboard: not available on this platform";
-                return;
-            }
-
-            var text = _clipboardProbe.Text ?? string.Empty;
-            await clipboard.SetTextAsync(text);
-            _clipboardStatus.Text = $"Copied {text.Length} chars at {DateTime.Now:HH:mm:ss}";
-        }
-        catch (Exception ex)
-        {
-            _clipboardStatus.Text = $"Copy failed — {ex.GetType().Name}: {ex.Message}";
-        }
-    }
-
-    private async void OnPasteClick(object? sender, RoutedEventArgs e)
-    {
-        try
-        {
-            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
-            if (clipboard is null)
-            {
-                _clipboardStatus.Text = "Clipboard: not available on this platform";
-                return;
-            }
-
-            var text = await clipboard.TryGetTextAsync();
-            _clipboardProbe.Text = text ?? string.Empty;
-            _clipboardStatus.Text = text is null
-                ? "Pasted: clipboard has no text"
-                : $"Pasted {text.Length} chars at {DateTime.Now:HH:mm:ss}";
-        }
-        catch (Exception ex)
-        {
-            _clipboardStatus.Text = $"Paste failed — {ex.GetType().Name}: {ex.Message}";
-        }
     }
 }

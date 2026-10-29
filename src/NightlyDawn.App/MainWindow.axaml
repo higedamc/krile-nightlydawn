@@ -36,20 +36,6 @@
 
     <views:KeysPanelView x:Name="KeysPanel" DockPanel.Dock="Bottom" Margin="0,12,0,0" />
 
-    <!-- Omarchy / Wayland spike panel from the app shell (#3); collapsed now that the column is the main content. -->
-    <Expander DockPanel.Dock="Bottom" Margin="0,12,0,0" IsExpanded="False"
-              Header="Platform check (Omarchy / Wayland spike)">
-      <StackPanel Spacing="8" Margin="0,8,0,0">
-        <TextBlock x:Name="PlatformInfo" FontFamily="monospace" TextWrapping="Wrap" />
-        <StackPanel Orientation="Horizontal" Spacing="8">
-          <TextBox x:Name="ClipboardProbe" Width="320" PlaceholderText="Type here (IME check), then copy / paste" />
-          <Button Content="Copy" Click="OnCopyClick" />
-          <Button Content="Paste" Click="OnPasteClick" />
-        </StackPanel>
-        <TextBlock x:Name="ClipboardStatus" Opacity="0.7" />
-      </StackPanel>
-    </Expander>
-
     <!-- Workspace and the search flip share one Panel so the flip is literally over the workspace (the fork's
          flip covers its main area, SearchFlip.xaml:263): same slot, same margin, the columns keep streaming
          underneath while it is open. SearchFlipView is collapsed (IsVisible=false) whenever the flip is closed. -->
