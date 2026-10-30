@@ -40,10 +40,20 @@
     <Style Selector="views|NoteRowView:pointerover TextBlock#LongTime">
       <Setter Property="IsVisible" Value="True" />
     </Style>
+    <!-- Size/margin match the fork's fav/RT buttons — 32x22, widened to 46x22 for the ones that carry a
+         word rather than a glyph (Timeline.xaml:1296-1298). CommandBar itself is left to size from its
+         content rather than forced to the fork's Height=21: at 22px tall these buttons would clip inside
+         a 21px container, and nothing in the brief asks the bar to be shorter than what it holds. -->
     <Style Selector="views|NoteRowView Button.row-command">
       <Setter Property="FontSize" Value="11" />
       <Setter Property="Padding" Value="6,2" />
       <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Width" Value="46" />
+      <Setter Property="Height" Value="22" />
+      <Setter Property="Margin" Value="0,-2" />
+    </Style>
+    <Style Selector="views|NoteRowView Button.row-command-icon">
+      <Setter Property="Width" Value="32" />
     </Style>
   </UserControl.Styles>
 
@@ -52,7 +62,8 @@
        the pointer falls through to the ListBoxItem above, and :pointerover never fires there. The commands
        would then appear only while the pointer is literally over a glyph. The gutter-hover assertion in
        NoteRowShapeRenderTests is what holds this line in place. -->
-  <Grid ColumnDefinitions="Auto,*" Margin="0,2" Background="Transparent">
+  <!-- Margin matches the fork's own row Grid (StarryEyes/Views/WindowParts/Primitives/Timeline.xaml:830-832). -->
+  <Grid ColumnDefinitions="Auto,*" Margin="8,10,0,10" Background="Transparent">
     <!-- Width and height match the fork's DecodePixelWidth="48" status avatar (Timeline.xaml:413). The size is
          fixed on the Border, not derived from the image: a row's height must be the same with an avatar, with
          none, and with one that failed to decode, or the column reflows as images arrive (L6b). The Image's
@@ -65,18 +76,30 @@
     </Border>
 
     <Panel Grid.Column="1">
-      <StackPanel Spacing="1">
-        <DockPanel LastChildFill="True">
+      <!-- No Spacing here: the name row and the body below each carry their own fork-measured margin
+           (Timeline.xaml:1070-1075 / :1161-1183), and those already encode the gap between them. -->
+      <StackPanel>
+        <!-- Margin matches the fork's name-row DockPanel (Timeline.xaml:1070-1075). -->
+        <DockPanel LastChildFill="True" Margin="0,-2,0,3">
           <!-- The timestamp is docked first so it keeps its width and the author label is the part that
                ellipsizes; docking it last would let a long name push the time out of the row. -->
           <Panel DockPanel.Dock="Right" VerticalAlignment="Top" Margin="8,0,0,0">
-            <TextBlock x:Name="ShortTime" Text="{Binding TimeLabel}" Opacity="0.6" />
-            <TextBlock x:Name="LongTime" Text="{Binding AbsoluteTimeLabel}" Opacity="0.6" />
+            <!-- FontSize/FontWeight match the fork's timestamp text (Timeline.xaml:1250-1285). -->
+            <TextBlock x:Name="ShortTime" Text="{Binding TimeLabel}" Opacity="0.6"
+                       FontSize="10.667" FontWeight="SemiLight" />
+            <TextBlock x:Name="LongTime" Text="{Binding AbsoluteTimeLabel}" Opacity="0.6"
+                       FontSize="10.667" FontWeight="SemiLight" />
           </Panel>
-          <TextBlock x:Name="AuthorLabelText" Text="{Binding AuthorLabel}" FontWeight="SemiBold"
+          <!-- FontSize matches the fork's screen-name text (Timeline.xaml:1076-1088). This label already
+               combines the fork's screen name and display name into one string (AuthorLabel.cs) — Nostr has
+               no separate handle/display-name pair the way the fork's Twitter-backed one did, and nothing
+               downstream of a kind:0 profile produces a second string to put on a "display name" line of its
+               own, so there is no second FontSize (12.667, Semilight) to apply here. -->
+          <TextBlock x:Name="AuthorLabelText" Text="{Binding AuthorLabel}" FontWeight="SemiBold" FontSize="13.333"
                      TextTrimming="CharacterEllipsis" />
         </DockPanel>
-        <TextBlock Text="{Binding DisplayContent}" TextWrapping="Wrap" />
+        <!-- Margin matches the fork's body Grid; no FontSize override there either, by design (Timeline.xaml:1161-1183). -->
+        <TextBlock Text="{Binding DisplayContent}" TextWrapping="Wrap" Margin="10,3,2,0" />
       </StackPanel>
 
       <!-- Overlaid rather than stacked under the body: revealing it must not change the row's height, or
@@ -91,7 +114,7 @@
           <Button x:Name="RepostButton" Classes="row-command" Content="Repost"
                   IsEnabled="{Binding CanReplyOrRepost}" Click="OnRepostClick" />
           <Button x:Name="QuoteButton" Classes="row-command" Content="Quote" Click="OnQuoteClick" />
-          <Button x:Name="ReactButton" Classes="row-command" Content="♥" Click="OnReactClick" />
+          <Button x:Name="ReactButton" Classes="row-command row-command-icon" Content="♥" Click="OnReactClick" />
         </StackPanel>
       </Border>
     </Panel>
