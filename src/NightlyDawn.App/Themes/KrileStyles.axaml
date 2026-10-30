@@ -34,11 +34,29 @@
     <Setter Property="Background" Value="{DynamicResource KrileSelectionBrush}" />
   </Style>
 
+  <!-- Fork parity (plan §68.8): hover/focus are a flat black wash at a fixed alpha, not a theme brush —
+       the same 4%/5% overlay regardless of which palette is active (Timeline.xaml:730-774). :not(:selected)
+       so a hovered or keyboard-focused selected row keeps showing the selection brush above instead of this
+       wash. -->
+  <Style Selector="ListBoxItem:pointerover:not(:selected) /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#0A000000" />
+  </Style>
+  <Style Selector="ListBoxItem:focus:not(:selected) /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#0C000000" />
+  </Style>
+
   <!-- The primary action of each panel (Subscribe, Post) carries the accent. Keyed off IsDefault rather than a
        class so no view has to be edited to opt in, and so a new panel's primary button inherits it for free. -->
   <Style Selector="Button[IsDefault=True]">
     <Setter Property="Background" Value="{DynamicResource KrileAccentBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource KrileAccentBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource KrileOnAccentBrush}" />
+  </Style>
+
+  <!-- The fork's five button styles (StarryEyes/App.xaml:32-321) all set CornerRadius="0" explicitly; Fluent's
+       default rounding on every button is the single biggest remaining gap from the fork's look (plan §68.8),
+       so this corrects it globally rather than per view. -->
+  <Style Selector="Button">
+    <Setter Property="CornerRadius" Value="0" />
   </Style>
 </Styles>
