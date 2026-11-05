@@ -38,7 +38,7 @@
                           this fork's window is a dark purple, so a literal black would make the focused tab vanish
                           into the background - the one role that must read best. The palette's own foreground is
                           what black *is* for this theme: the highest-contrast text colour on its window.)
-         TabStripViewRenderTests measures the realised Foreground of all three and asserts they differ and that the
+         TabHeaderLookRenderTests (TheThreeRoles_RealiseThreeDifferentForegrounds_AndTheFocusedOneIsNotTheBackground) measures the realised Foreground of all three and asserts they differ and that the
          focused one is not the background. -->
     <Style Selector="Button.TabHeader, Button.TabClose">
       <Setter Property="Template">
