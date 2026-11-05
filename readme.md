@@ -245,6 +245,48 @@ every OS and CI runner; and the fork's saved-search candidates came from
 Twitter's saved-search API, which has no Nostr counterpart, so they are not
 ported.
 
+## Timeline keys
+
+Each column's list has a keyboard cursor, ported from the fork's `[Timeline]`
+key group (`StarryEyes/Settings/KeyAssigns/DefaultAssignProvider.cs`). The
+cursor *is* the list's selection: clicking a row and pressing `j` move the same
+thing, and the highlighted row is the one the keys act on. Keys are read only
+while keyboard focus is inside a timeline list — the compose box, a tab's
+query box and the search box keep every key for typing, so `r` in the compose
+box types an `r`.
+
+| Key | Action |
+|---|---|
+| `j` / `↓` | cursor down (from no cursor: the first row). The last row is a wall |
+| `k` / `↑` | cursor up. From the first row this clears the cursor, as in the fork |
+| `Shift+j` | last row |
+| `Shift+k`, `0` | first row |
+| `Esc` | clear the cursor |
+| `r` | reply to the focused note (opens the compose box as a reply) |
+| `Ctrl+r` | repost the focused note |
+| `f`, `;` | react (♥, kind:7 `+`) to the focused note |
+| `Ctrl+c` | copy the focused note's full text (not the truncated row) to the clipboard |
+
+The row the cursor moves to is scrolled into view. When a newer note lands
+above the cursor the cursor stays on the same note (its row number goes up by
+one); when the focused row is the one dropped at the per-tab cap, the cursor is
+cleared. Every key with nothing to act on says so on the tab's status line
+instead of doing nothing: no cursor, a row with no actions, a reply or repost
+on something that is not a text note, or a repost or reaction without an
+unlocked key. The keys follow the same rules as the row buttons they mirror:
+only text notes can be replied to or reposted, any kind can be reacted to, and
+`r` only opens the compose box as a reply — posting it still needs the key.
+
+Two chords from the fork's key table are deliberately absent, and this is a fact
+about the fork rather than a gap in this port: `Ctrl+t: CreateTab` and
+`Ctrl+q: QuoteLink` are listed under `[Timeline]` but unreachable in StarryEyes
+itself — its `[Global]` group runs first on the window's `PreviewKeyDown` and
+already binds `Ctrl+t` (`FocusToTimeline`) and `Ctrl+q` (`FocusToSearch`), and a
+group lookup never falls back to another group (`KeyAssignTrigger.cs:28-36`,
+`KeyAssignProfile.cs:157-167`). Tab and column moves (`h`/`l`, `Shift+h`/`Shift+l`),
+`Space: ToggleSelect` and the bulk actions are a later leaf: they need
+multi-select or touch the workspace rather than one tab.
+
 ## Theme
 
 The palette is Krile's own: a dark-leaning purple, with a light variant of the

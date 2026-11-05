@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using NightlyDawn.App.Composing;
@@ -27,6 +28,14 @@ public sealed class TimelineViewModel : INotifyPropertyChanged, IDisposable, IPu
     public const int DefaultMaxNotes = 500;
     public const string IdleStatus = "Enter a query and press Subscribe.";
 
+    /// <summary><see cref="FocusedIndex"/>'s value for "no row is focused" -- the same -1 a <c>ListBox</c> uses for
+    /// no selection, so the two-way binding in <c>TimelineView.axaml</c> never has to translate.</summary>
+    public const int NoFocus = -1;
+
+    public const string NothingFocusedStatus = "No note is focused: press j or ↓ to focus one.";
+    public const string NoActionsStatus = "This note has no actions wired.";
+    public const string NotATextNoteStatus = "Only a text note can be replied to or reposted.";
+
     private readonly ITimelineSourceFactory _factory;
     private readonly Action<Action> _postToUi;
     private readonly int _maxNotes;
@@ -49,6 +58,7 @@ public sealed class TimelineViewModel : INotifyPropertyChanged, IDisposable, IPu
     private bool _isLoading;
     private bool _disposed;
     private Timeline? _activeTimeline;
+    private int _focusedIndex = NoFocus;
 
     /// <param name="profileStore">Resolves author display names (plan §8). Null skips profile lookups entirely --
     /// rows show the pubkey-prefix fallback, same as before this leaf.</param>
@@ -82,6 +92,154 @@ public sealed class TimelineViewModel : INotifyPropertyChanged, IDisposable, IPu
 
     /// <summary>Newest first. Mutated only via <c>postToUi</c>.</summary>
     public ObservableCollection<NoteRow> Notes { get; } = [];
+
+    /// <summary>
+    /// The keyboard cursor (L17): the index into <see cref="Notes"/> of the row the timeline keys act on, or
+    /// <see cref="NoFocus"/>. This is the fork's <c>FocusedStatus</c> (<c>TimelineViewModelBase.cs:344-358</c>)
+    /// as an index, and it is <b>the same state as the list's selection</b>: <c>TimelineView.axaml</c> binds
+    /// <c>TimelineList.SelectedIndex</c> to it two-way, so a mouse click on a row and a <c>j</c> keypress both
+    /// land here, and the focused row is painted through the ordinary <c>ListBoxItem:selected</c> look rather than
+    /// an invisible second cursor.
+    ///
+    /// <para><b>Deliberate difference from the fork</b> (Lead ruling, plan §68.9.1): StarryEyes keeps focus (one
+    /// cursor) and selection (many checked rows, <c>SelectedStatuses</c>) apart because it has multi-select and
+    /// bulk actions. This port's list is <c>SelectionMode="Single"</c> and bulk actions are out of scope, so two
+    /// notions would only be two authorities that silently disagree the first time someone clicks a row.</para>
+    ///
+    /// <para>The setter accepts whatever the list pushes and clamps anything outside <see cref="Notes"/> to
+    /// <see cref="NoFocus"/>; <see cref="AddNote"/> keeps the cursor on the <em>same note</em> when newer notes
+    /// are inserted above it (the fork's cursor is a reference, so it never drifted either), and drops it when
+    /// the focused row is capped away or the column is cleared by <see cref="Subscribe"/>.</para>
+    /// </summary>
+    public int FocusedIndex
+    {
+        get => _focusedIndex;
+        set => SetField(ref _focusedIndex, value >= 0 && value < Notes.Count ? value : NoFocus);
+    }
+
+    /// <summary>The row under the cursor, or null when <see cref="FocusedIndex"/> is <see cref="NoFocus"/>.</summary>
+    public NoteRow? FocusedNote => _focusedIndex >= 0 && _focusedIndex < Notes.Count ? Notes[_focusedIndex] : null;
+
+    /// <summary>Fork <c>FocusDown</c> (<c>:368-376</c>): no cursor goes to the first row; the last row stays put.</summary>
+    public void FocusDown()
+    {
+        if (Notes.Count == 0)
+        {
+            return;
+        }
+
+        var next = _focusedIndex < 0 ? 0 : _focusedIndex + 1;
+        if (next < Notes.Count)
+        {
+            FocusedIndex = next;
+        }
+    }
+
+    /// <summary>Fork <c>FocusUp</c> (<c>:361-366</c>): moving up from the first row <em>clears</em> the cursor rather
+    /// than staying on it -- kept as-is, since it is what the key table's users have in their fingers.</summary>
+    public void FocusUp()
+    {
+        if (Notes.Count == 0 || _focusedIndex < 0)
+        {
+            return;
+        }
+
+        FocusedIndex = _focusedIndex - 1;
+    }
+
+    /// <summary>Fork <c>FocusTop</c> (<c>:378-382</c>; <c>s+k</c> and <c>0</c>).</summary>
+    public void FocusTop()
+    {
+        if (Notes.Count > 0)
+        {
+            FocusedIndex = 0;
+        }
+    }
+
+    /// <summary>Fork <c>FocusBottom</c> (<c>:384-388</c>; <c>s+j</c>).</summary>
+    public void FocusBottom()
+    {
+        if (Notes.Count > 0)
+        {
+            FocusedIndex = Notes.Count - 1;
+        }
+    }
+
+    /// <summary>Fork <c>ClearSelect</c> on <c>escape</c>. With focus and selection being one state here, this
+    /// is also what clears the row highlight.</summary>
+    public void ClearFocus() => FocusedIndex = NoFocus;
+
+    /// <summary><c>r</c> -> <see cref="NoteRowActions.BeginReply"/> on the focused row. Every way this can do
+    /// nothing says so on <see cref="Status"/> (plan §68.9: a key that is pressed must never be silent): no cursor,
+    /// a row built without actions, or a kind that <see cref="NoteRow.CanReplyOrRepost"/> refuses -- the same
+    /// guard the row's Reply button is disabled by.</summary>
+    public void ReplyToFocused()
+    {
+        if (TryGetFocusedActions(out var row, out var actions) && RowCanReplyOrRepost(row))
+        {
+            actions.BeginReply();
+        }
+    }
+
+    /// <summary><c>c+r</c> -> <see cref="NoteRowActions.RepostAsync"/> on the focused row. Failures (no publisher,
+    /// no unlocked key, relay rejections) are reported on <see cref="Status"/> by <see cref="NoteRowActions"/>
+    /// itself; this never throws.</summary>
+    public Task RepostFocusedAsync() =>
+        TryGetFocusedActions(out var row, out var actions) && RowCanReplyOrRepost(row)
+            ? actions.RepostAsync()
+            : Task.CompletedTask;
+
+    /// <summary><c>f</c> / <c>Oem1</c> -> <see cref="NoteRowActions.ReactAsync"/> (♥, the fork's <c>Favorite</c>) on
+    /// the focused row. Same failure reporting as <see cref="RepostFocusedAsync"/>; any kind can be reacted to.</summary>
+    public Task ReactToFocusedAsync() =>
+        TryGetFocusedActions(out _, out var actions)
+            ? actions.ReactAsync()
+            : Task.CompletedTask;
+
+    /// <summary>What <c>c+c</c> copies: the focused note's <em>full</em> <see cref="Note.Content"/> from
+    /// <see cref="FindNote"/>, not the row's <see cref="NoteRow.DisplayContent"/>, which is truncated at
+    /// <see cref="NoteRow.MaxContentChars"/> for layout. Null (with <see cref="Status"/> set) when nothing is
+    /// focused. The clipboard write itself is the view's job -- this class has no Avalonia dependency.</summary>
+    public string? FocusedContentForCopy()
+    {
+        if (FocusedNote is not { } row)
+        {
+            Status = NothingFocusedStatus;
+            return null;
+        }
+
+        return FindNote(row.Id)?.Content ?? row.DisplayContent;
+    }
+
+    private bool TryGetFocusedActions([NotNullWhen(true)] out NoteRow? row, [NotNullWhen(true)] out NoteRowActions? actions)
+    {
+        row = FocusedNote;
+        actions = row?.Actions;
+        if (row is null)
+        {
+            Status = NothingFocusedStatus;
+            return false;
+        }
+
+        if (actions is null)
+        {
+            Status = NoActionsStatus;
+            return false;
+        }
+
+        return true;
+    }
+
+    private bool RowCanReplyOrRepost(NoteRow row)
+    {
+        if (row.CanReplyOrRepost)
+        {
+            return true;
+        }
+
+        Status = NotATextNoteStatus;
+        return false;
+    }
 
     /// <summary>The <see cref="Note"/> behind a row of <see cref="Notes"/>, or null when no row with that id is
     /// currently shown (L7a). This is how <see cref="Search.SearchResultViewModel"/> matches keywords against the
@@ -156,6 +314,7 @@ public sealed class TimelineViewModel : INotifyPropertyChanged, IDisposable, IPu
         }
 
         CancelCurrentStream();
+        FocusedIndex = NoFocus; // Before the clear, so the cursor never points past the end of an emptied list.
         Notes.Clear();
         _notesById.Clear();
 
@@ -474,13 +633,27 @@ public sealed class TimelineViewModel : INotifyPropertyChanged, IDisposable, IPu
             index++;
         }
 
+        // Captured before the insert: a bound ListBox shifts its own SelectedIndex on the CollectionChanged the
+        // insert raises and pushes that back into FocusedIndex two-way, before control returns here. Deriving the
+        // new cursor from the pre-insert value makes this line idempotent with that push (same target index)
+        // instead of shifting the cursor twice; without a list bound (unit tests, no view), it is the only shift.
+        var focusedBefore = _focusedIndex;
         Notes.Insert(index, row);
+        if (focusedBefore >= index)
+        {
+            FocusedIndex = focusedBefore + 1; // The cursor stays on the note it was on, not on the index (fork: FocusedStatus is a reference).
+        }
 
         while (Notes.Count > _maxNotes)
         {
             var dropped = Notes[^1];
             Notes.RemoveAt(Notes.Count - 1);
             _notesById.Remove(dropped.Id);
+        }
+
+        if (_focusedIndex >= Notes.Count)
+        {
+            FocusedIndex = NoFocus; // The focused row was the one capped away.
         }
 
         if (!IsLoading)
