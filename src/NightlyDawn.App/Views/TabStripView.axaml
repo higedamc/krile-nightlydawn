@@ -2,8 +2,74 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:tl="using:NightlyDawn.App.Timelines"
              xmlns:core="using:NightlyDawn.Core"
+             xmlns:local="using:NightlyDawn.App.Views"
              x:Class="NightlyDawn.App.Views.TabStripView"
              x:DataType="tl:ColumnViewModel">
+  <UserControl.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.ThemeDictionaries>
+        <!-- The "Tab" role (an unselected tab). StarryEyes DesignTimeDefault.xaml:36-42 has #FF999999 for it, written
+             against a white window; the Dark value keeps that grey, and the Light one is darker because #999999 on
+             this fork's light window (#F4F1F8) reads at under 3:1. Local to this view (not Themes/**, which L16
+             finished) because only this view has a "tab" role. -->
+        <ResourceDictionary x:Key="Dark">
+          <SolidColorBrush x:Key="KrileTabIdleBrush" Color="#FF999999" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Light">
+          <SolidColorBrush x:Key="KrileTabIdleBrush" Color="#FF7C7690" />
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+    </ResourceDictionary>
+  </UserControl.Resources>
+
+  <UserControl.Styles>
+    <!-- Tab headers, in the fork's shape (StarryEyes MainArea.xaml:23-66): plain text, no border, no corner radius,
+         no padding, transparent background, FontSize 16 (BuiltInThemeProvider.cs:113-119), Margin 0,3,0,0 on the label.
+         Still a Button - the fork's is a click target too, and a Button keeps keyboard activation - but with its own
+         flat template, so Fluent's pointer-over/pressed foreground (applied to a template part this one does not
+         have) cannot repaint the role colour. The colour is the *role*, set below from two independent facts.
+
+         The fork's three colours are two conditions, not three states (MainArea.xaml:66-81): the tab is its column's
+         selected tab AND the column is the focused one -> TabFocused; selected tab of an unfocused column ->
+         TabSelected; anything else -> Tab.
+           Tab         -> KrileTabIdleBrush (above)
+           TabSelected -> KrileAccentBrush      (the fork's #FF1BA1E2 blue is its accent)
+           TabFocused  -> KrileForegroundBrush  (NOT the fork's #FF000000: that is black on the fork's white window, and
+                          this fork's window is a dark purple, so a literal black would make the focused tab vanish
+                          into the background - the one role that must read best. The palette's own foreground is
+                          what black *is* for this theme: the highest-contrast text colour on its window.)
+         TabStripViewRenderTests measures the realised Foreground of all three and asserts they differ and that the
+         focused one is not the background. -->
+    <Style Selector="Button.TabHeader, Button.TabClose">
+      <Setter Property="Template">
+        <ControlTemplate>
+          <ContentPresenter x:Name="TabHeaderPresenter" Background="{TemplateBinding Background}"
+                            Content="{TemplateBinding Content}" Padding="{TemplateBinding Padding}"
+                            HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
+        </ControlTemplate>
+      </Setter>
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="FontSize" Value="16" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{DynamicResource KrileTabIdleBrush}" />
+    </Style>
+    <Style Selector="Button.TabHeader">
+      <Setter Property="Padding" Value="0,3,0,0" />
+    </Style>
+    <Style Selector="Button.TabClose">
+      <Setter Property="Padding" Value="6,3,0,0" />
+    </Style>
+    <Style Selector="Button.TabHeader[(local|TabStripView.Role)=Selected]">
+      <Setter Property="Foreground" Value="{DynamicResource KrileAccentBrush}" />
+    </Style>
+    <Style Selector="Button.TabHeader[(local|TabStripView.Role)=Focused]">
+      <Setter Property="Foreground" Value="{DynamicResource KrileForegroundBrush}" />
+    </Style>
+  </UserControl.Styles>
+
   <!-- Moved from MainWindow's header into each column (plan §21.2 / L4b): the fork nests Tabs inside Columns
        (StarryEyes MainArea.xaml ColumnTemplate:96), so the strip now belongs to the column it switches
        between, not to the window. One instance per column, inside WorkspaceView's per-column template;
@@ -31,23 +97,37 @@
            leftover space instead of its tab buttons' actual width — not a visual bug (items stay
            left-aligned in the extra room), but it breaks anything measuring "where the tab labels end"
            (ThemeSwitcherRenderTests compares exactly that against the header's theme switch). -->
-      <ItemsControl x:Name="TabStrip" DockPanel.Dock="Left" HorizontalAlignment="Left" ItemsSource="{Binding Tabs}">
+      <!-- WrapPanel, MinHeight 16, Margin 8,0: MainArea.xaml:89-112. A wrap, not a row, so a column too narrow for
+           its tabs grows downward instead of clipping them. -->
+      <ItemsControl x:Name="TabStrip" DockPanel.Dock="Left" HorizontalAlignment="Left" MinHeight="16" Margin="8,0"
+                    ItemsSource="{Binding Tabs}">
         <ItemsControl.ItemsPanel>
           <ItemsPanelTemplate>
-            <StackPanel Orientation="Horizontal" Spacing="4" />
+            <WrapPanel Orientation="Horizontal" />
           </ItemsPanelTemplate>
         </ItemsControl.ItemsPanel>
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="tl:TimelineViewModel">
-            <Border Padding="8,4" CornerRadius="4" BorderThickness="1"
-                    BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}">
-              <StackPanel Orientation="Horizontal" Spacing="4">
+            <Border Margin="0,4,0,4" Background="Transparent">
+              <StackPanel Orientation="Horizontal" Margin="0,0,8,0">
                 <!-- No persisted/user-set title yet (plan §21.2's "やらないこと": that is step 4's "クエリは
                      タブの設定へ"); shows the live query each tab was opened with, falling back before the
-                     first Subscribe. -->
-                <Button x:Name="TabHeaderButton" Content="{Binding ActiveTimeline.Title, FallbackValue='(new tab)'}"
-                        Click="OnSelectTabClick" Tag="{Binding}" />
-                <Button x:Name="CloseTabButton" Content="×" Click="OnCloseTabClick" Tag="{Binding}" />
+                     first Subscribe. Unread counts (the fork's second TextBlock, MainArea.xaml:58-66) are not
+                     here on purpose: no unread state exists in App or Core yet (L18 ruling 3) - a later leaf. -->
+                <Button x:Name="TabHeaderButton" Classes="TabHeader"
+                        Content="{Binding ActiveTimeline.Title, FallbackValue='(new tab)'}"
+                        Click="OnSelectTabClick" Tag="{Binding}">
+                  <local:TabStripView.Role>
+                    <MultiBinding Converter="{x:Static local:TabHeaderRoleConverter.Instance}">
+                      <Binding Path="$parent[ItemsControl].((tl:ColumnViewModel)DataContext).SelectedTab" />
+                      <Binding Path="." />
+                      <Binding Path="$parent[ItemsControl].((tl:ColumnViewModel)DataContext).IsFocused" />
+                    </MultiBinding>
+                  </local:TabStripView.Role>
+                </Button>
+                <!-- The visible x stays (this port has no right-click menu and L18 does not invent one); only its
+                     chrome is gone. -->
+                <Button x:Name="CloseTabButton" Classes="TabClose" Content="×" Click="OnCloseTabClick" Tag="{Binding}" />
               </StackPanel>
             </Border>
           </DataTemplate>

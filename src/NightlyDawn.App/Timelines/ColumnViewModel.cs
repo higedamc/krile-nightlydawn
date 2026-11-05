@@ -24,6 +24,7 @@ public sealed class ColumnViewModel : INotifyPropertyChanged, IDisposable
     private readonly Func<TimelineViewModel> _tabFactory;
     private TimelineViewModel? _selectedTab;
     private double _minWidthHint = 420;
+    private bool _isFocused;
     private bool _disposed;
 
     /// <param name="id">Identity for layout persistence (L9); a fresh one when null. <see cref="WorkspaceViewModel"/>
@@ -71,6 +72,19 @@ public sealed class ColumnViewModel : INotifyPropertyChanged, IDisposable
     /// <c>AddTabButton</c> binds <c>IsEnabled</c> to it and <see cref="AddTab"/> refuses when it is false. Raised
     /// through <see cref="PropertyChanged"/> whenever <see cref="Tabs"/> changes.</summary>
     public bool CanAddTab => Tabs.Count < AppState.MaxTabsPerColumn;
+
+    /// <summary>Whether this is the workspace's selected column (L18, plan §68): what <c>TabStripView</c> reads to tell
+    /// "the selected tab of the column that has focus" from "the selected tab of a column that does not" -- the fork
+    /// colours those differently (StarryEyes <c>MainArea.xaml:66-81</c>). <see cref="WorkspaceViewModel.SelectedColumn"/>
+    /// is the one authority and its setter the only writer (the setter here is <c>internal</c>), so this can never
+    /// disagree with it: the old column is cleared and the new one set in the same setter call, whichever path
+    /// (<c>AddColumn</c>, <c>CloseColumn</c>, <c>RestoreLayout</c>, a click) moved the selection. It is deliberately not
+    /// part of the saved layout -- <c>ActiveColumnId</c> already records it.</summary>
+    public bool IsFocused
+    {
+        get => _isFocused;
+        internal set => SetField(ref _isFocused, value);
+    }
 
     /// <summary>Null when <see cref="Tabs"/> is empty.</summary>
     public TimelineViewModel? SelectedTab
