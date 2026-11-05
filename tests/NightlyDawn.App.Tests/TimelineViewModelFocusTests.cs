@@ -13,8 +13,12 @@ namespace NightlyDawn.App.Tests;
 /// The move semantics are the fork's (<c>TimelineViewModelBase.cs:361-388</c>): down from no cursor lands on
 /// the first row, up from the first row clears the cursor, the last row is a wall. The two facts a bound
 /// <c>ListBox</c> would otherwise have to be trusted for -- the cursor following its note under a newer insert,
-/// and dying with its row at the cap -- are asserted here on the view model alone, and again through the real
-/// list in <c>TimelineKeyboardRenderTests</c>.
+/// and dying with its row at the cap -- are asserted here on the view model alone. Only the first is also
+/// asserted through the real list (<c>TimelineKeyboardRenderTests.CtrlR_RepostsTheFocusedNote_AndTheCursorStaysOnItWhenTheRepostLandsAbove</c>);
+/// the cap half has no render test. It was checked by hand through a bound <c>ListBox</c> during the PR #56
+/// review (<c>maxNotes: 3</c>, cursor on the last row, one newer note: both indices went to -1), so the trailing
+/// cap check in <c>AddNote</c> is load-bearing in the live tree, not only here -- Avalonia does not slide the
+/// selection onto the new last row by itself.
 ///
 /// <para>Negative controls run on a <c>git archive</c> scratch while writing this class (exact outputs in the
 /// PR body): deleting the <c>focusedBefore >= index</c> shift in <c>AddNote</c> turns
