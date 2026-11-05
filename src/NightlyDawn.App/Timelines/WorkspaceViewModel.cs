@@ -74,8 +74,21 @@ public sealed class WorkspaceViewModel : INotifyPropertyChanged, IDisposable
         get => _selectedColumn;
         set
         {
+            var previous = _selectedColumn;
             if (SetField(ref _selectedColumn, value))
             {
+                // The only writer of ColumnViewModel.IsFocused (L18): clear the old column and set the new one in
+                // this one place, so "which column is focused" has a single authority and cannot drift.
+                if (previous is not null)
+                {
+                    previous.IsFocused = false;
+                }
+
+                if (value is not null)
+                {
+                    value.IsFocused = true;
+                }
+
                 LayoutChanged?.Invoke(this, EventArgs.Empty);
             }
         }

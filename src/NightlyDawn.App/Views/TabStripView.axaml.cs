@@ -1,5 +1,9 @@
+using System.Globalization;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Data;
+using Avalonia.Data.Converters;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using NightlyDawn.App.Timelines;
@@ -8,6 +12,16 @@ namespace NightlyDawn.App.Views;
 
 public sealed partial class TabStripView : UserControl
 {
+    /// <summary>Which of the fork's three tab colours a header takes (L18; see TabStripView.axaml's styles for why
+    /// these are two conditions and not three independent states). An attached property so a plain style selector can
+    /// key off it; set only by <see cref="TabHeaderRoleConverter"/> through a MultiBinding.</summary>
+    public static readonly AttachedProperty<TabHeaderRole> RoleProperty =
+        AvaloniaProperty.RegisterAttached<TabStripView, Button, TabHeaderRole>("Role");
+
+    public static TabHeaderRole GetRole(Button button) => button.GetValue(RoleProperty);
+
+    public static void SetRole(Button button, TabHeaderRole value) => button.SetValue(RoleProperty, value);
+
     private readonly ToggleButton _settingsToggle;
 
     public TabStripView()
@@ -51,4 +65,40 @@ public sealed partial class TabStripView : UserControl
 
     private void OnCloseSelectedTabClick(object? sender, RoutedEventArgs e) =>
         ViewModel?.SelectedTab?.RequestClose?.Invoke();
+}
+
+/// <summary>The fork's tab colour roles (StarryEyes <c>MainArea.xaml:66-81</c>).</summary>
+public enum TabHeaderRole
+{
+    /// <summary>Not the column's selected tab.</summary>
+    Idle,
+
+    /// <summary>The column's selected tab, but the column is not the focused one ("TabSelected").</summary>
+    Selected,
+
+    /// <summary>The column's selected tab and the column is the focused one ("TabFocused").</summary>
+    Focused,
+}
+
+/// <summary>Inputs, in order: the column's <c>SelectedTab</c>, this header's own tab, the column's <c>IsFocused</c>.
+/// Anything not yet resolved (a binding still unset, or in error) is <see cref="TabHeaderRole.Idle"/> -- the
+/// quietest colour, never a wrong loud one.</summary>
+public sealed class TabHeaderRoleConverter : IMultiValueConverter
+{
+    public static readonly TabHeaderRoleConverter Instance = new();
+
+    public object? Convert(IList<object?> values, Type targetType, object? parameter, CultureInfo culture)
+    {
+        if (values.Count != 3 || values[0] is BindingNotification or UnsetValueType || values[1] is null || values[2] is not bool columnFocused)
+        {
+            return TabHeaderRole.Idle;
+        }
+
+        if (!ReferenceEquals(values[0], values[1]))
+        {
+            return TabHeaderRole.Idle;
+        }
+
+        return columnFocused ? TabHeaderRole.Focused : TabHeaderRole.Selected;
+    }
 }
