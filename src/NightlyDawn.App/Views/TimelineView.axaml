@@ -20,7 +20,11 @@
       <TextBlock DockPanel.Dock="Top" Margin="0,8,0,4" Opacity="0.7"
                  Text="{Binding Status}" />
 
-      <ListBox x:Name="TimelineList" ItemsSource="{Binding Notes}" SelectionMode="Single">
+      <!-- SelectedIndex is bound two-way to the view model's keyboard cursor (L17, plan §68.9.1): one state for
+           the click and for j/k, so the focused row is the selected row and is painted as such. The key handler
+           itself lives in TimelineView.axaml.cs, attached on the tunnel pass. -->
+      <ListBox x:Name="TimelineList" ItemsSource="{Binding Notes}" SelectionMode="Single"
+               SelectedIndex="{Binding FocusedIndex, Mode=TwoWay}">
         <ListBox.ItemTemplate>
           <DataTemplate x:DataType="tl:NoteRow">
             <views:NoteRowView />
