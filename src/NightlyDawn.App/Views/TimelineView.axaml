@@ -7,30 +7,34 @@
   <!-- One tab's timeline content (one column before plan §21.2's inversion). Query text goes to the
        ITimelineSourceFactory verbatim; KQL is compiled downstream (1c). QueryBox/SubscribeButton/× moved up
        into TabStripView's row (plan §22.3 / L4b-2): that row had ~500 DIP of unused width next to one tab
-       header, so folding the query row into it removes ~40 DIP of vertical chrome from here instead of
-       trimming Padding; Padding is back to 12 (the 8 used between L4b and L4b-2 only fit macOS, not the
-       Linux CI runner; plan §22.2). -->
-  <Border Padding="12"
-          BorderThickness="1" BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
-          CornerRadius="6">
-    <DockPanel>
-      <ProgressBar DockPanel.Dock="Top" IsIndeterminate="True"
-                   IsVisible="{Binding IsLoading}" />
+       header, so folding the query row into it removed ~40 DIP of vertical chrome from here. (History: this
+       file once carried Border Padding 12, after an 8 that only fit macOS and not the Linux CI runner, plan
+       §22.2; L19 removed that Border entirely, so no Padding remains here - see the next comment.) -->
+  <!-- No Border (L19, plan §70): the fork draws no frame around a column or its timeline. Its column root is
+       `Grid Margin="8,4,8,0" Background="{x:Null}"` (StarryEyes MainArea.xaml:84) and Timeline.xaml's own root
+       (:1985) is a bare DockPanel - the only Borders in that file (:393, :547) are one status row's chrome, which is
+       NoteRowView's job (L16), not a column's. The old `Border Padding="12" BorderThickness="1" CornerRadius="6"`
+       was ours, and its brush was a Fluent default rather than anything from this fork's palette. Columns are now
+       separated by margin alone (WorkspaceView's ColumnRoot Margin="8,4,8,0"); no line, tint, shadow or radius is
+       substituted for the frame, because the original has none. The fork's `0,4,0,0` above the timeline lives on
+       WorkspaceView's ContentControl, not here (one place only; see the comment there). -->
+  <DockPanel>
+    <ProgressBar DockPanel.Dock="Top" IsIndeterminate="True"
+                 IsVisible="{Binding IsLoading}" />
 
-      <TextBlock DockPanel.Dock="Top" Margin="0,8,0,4" Opacity="0.7"
-                 Text="{Binding Status}" />
+    <TextBlock DockPanel.Dock="Top" Margin="0,8,0,4" Opacity="0.7"
+               Text="{Binding Status}" />
 
-      <!-- SelectedIndex is bound two-way to the view model's keyboard cursor (L17, plan §68.9.1): one state for
-           the click and for j/k, so the focused row is the selected row and is painted as such. The key handler
-           itself lives in TimelineView.axaml.cs, attached on the tunnel pass. -->
-      <ListBox x:Name="TimelineList" ItemsSource="{Binding Notes}" SelectionMode="Single"
-               SelectedIndex="{Binding FocusedIndex, Mode=TwoWay}">
-        <ListBox.ItemTemplate>
-          <DataTemplate x:DataType="tl:NoteRow">
-            <views:NoteRowView />
-          </DataTemplate>
-        </ListBox.ItemTemplate>
-      </ListBox>
-    </DockPanel>
-  </Border>
+    <!-- SelectedIndex is bound two-way to the view model's keyboard cursor (L17, plan §68.9.1): one state for
+         the click and for j/k, so the focused row is the selected row and is painted as such. The key handler
+         itself lives in TimelineView.axaml.cs, attached on the tunnel pass. -->
+    <ListBox x:Name="TimelineList" ItemsSource="{Binding Notes}" SelectionMode="Single"
+             SelectedIndex="{Binding FocusedIndex, Mode=TwoWay}">
+      <ListBox.ItemTemplate>
+        <DataTemplate x:DataType="tl:NoteRow">
+          <views:NoteRowView />
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+  </DockPanel>
 </UserControl>

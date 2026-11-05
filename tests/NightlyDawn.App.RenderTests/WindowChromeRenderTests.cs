@@ -230,7 +230,11 @@ public sealed class WindowChromeRenderTests
         var scrollViewer = session.Find<ScrollViewer>("ColumnsScrollViewer") ?? throw new Xunit.Sdk.XunitException("ColumnsScrollViewer not found");
         var columnRoot = session.Find<DockPanel>("ColumnRoot") ?? throw new Xunit.Sdk.XunitException("ColumnRoot not found");
 
-        Assert.Equal(scrollViewer.Bounds.Width, columnRoot.Bounds.Width, precision: 1);
+        // L19: ColumnRoot now carries the fork's Margin="8,4,8,0" (MainArea.xaml:84) since TimelineView lost its Border,
+        // and a margin is outside Bounds, so the column fills the viewport as Bounds.Width + its own horizontal
+        // margin. Measured against the realised margin rather than a literal 16, and not loosened: a StackPanel
+        // host would still leave this at 640 + 16, nowhere near 1157.
+        Assert.Equal(scrollViewer.Bounds.Width, columnRoot.Bounds.Width + columnRoot.Margin.Left + columnRoot.Margin.Right, precision: 1);
         Assert.True(columnRoot.Bounds.Width > 1000,
             $"ColumnRoot: {columnRoot.Bounds.Width:0.#} is not meaningfully past SoleColumnMinWidth (640) -- " +
             "the equality above could pass by coincidence if the viewport itself were small");

@@ -68,9 +68,16 @@
                  leaves zero tabs) would report near-zero desired width and UniformGrid would just split the
                  viewport evenly among whatever cells exist, no 600 DIP floor protected. MinWidthHint is
                  WorkspaceViewModel's (the only place that knows how many sibling columns exist). -->
-            <DockPanel x:Name="ColumnRoot" MinWidth="{Binding MinWidthHint}">
+            <!-- Margin="8,4,8,0" is the fork's column root (StarryEyes MainArea.xaml:84, `Grid Margin="8,4,8,0"
+                 Background="{x:Null}"`), moved here when TimelineView lost its Border (L19): with no frame, this
+                 margin is the only thing separating a column from its neighbour (8 + 8 = the fork's 16 DIP gutter,
+                 MainArea.xaml:194-201). MinWidth is unaffected - margin sits outside it. -->
+            <DockPanel x:Name="ColumnRoot" Margin="8,4,8,0" MinWidth="{Binding MinWidthHint}">
               <views:TabStripView DockPanel.Dock="Top" />
-              <ContentControl Content="{Binding SelectedTab}" />
+              <!-- Margin="0,4,0,0": the fork's offset between the tab row and the timeline (MainArea.xaml:113-141,
+                   `Grid.Row=1 Margin="0,4,0,0"`). Placed on this host, the equivalent of the fork's per-column
+                   timeline container, and NOT also on TimelineView's root: a margin on both would be 8 DIP. -->
+              <ContentControl Margin="0,4,0,0" Content="{Binding SelectedTab}" />
             </DockPanel>
           </DataTemplate>
         </ItemsControl.ItemTemplate>
