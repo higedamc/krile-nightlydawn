@@ -23,16 +23,30 @@
       <views:ComposeBoxView x:Name="ComposeBox" />
     </DockPanel>
 
-    <TextBlock DockPanel.Dock="Bottom" Opacity="0.5" FontSize="12" Margin="0,8,0,0"
-               Text="Based on Krile StarryEyes by Karno (MIT). New code (C) 2026 Krile NightlyDawn contributors." />
-
-    <!-- Status line (plan §26.5 / L4c ⑥): the selected column's selected tab's note count, a thin row just
-         above the copyright line. FallbackValue covers the (SelectedColumn, SelectedTab) chain being briefly
-         null (e.g. a column with zero tabs); WindowChromeRenderTests asserts both the fallback text and the
-         real count after Subscribe, the same before/after shape TabHeaderRenderTests used for plan §24.2's
-         bug — a FallbackValue alone would otherwise mask a binding that never updates. -->
-    <TextBlock x:Name="StatusLine" DockPanel.Dock="Bottom" Opacity="0.6" FontSize="11" Margin="0,4,0,0"
-               Text="{Binding SelectedColumn.SelectedTab.Notes.Count, FallbackValue='0 notes', StringFormat='{}{0} notes'}" />
+    <!-- One bottom band (L20): the fork's window has a single Auto-height row under its content,
+         `Grid Name="StatusGrid" Grid.Row="1" Background="Transparent"` (StarryEyes MainWindow.xaml:315-322), with
+         its cells side by side. This port used to stack two text rows here (copyright, then status line); they
+         are now two cells of one row. Only cells with a real state behind them exist: the fork's mute toggle,
+         tweet counters, uptime and Backstage click have nothing to show in this port, so none is drawn and the
+         band does not react to clicks (there is nothing to open).
+         Status line (plan §26.5 / L4c ⑥): the selected column's selected tab's note count. FallbackValue covers
+         the (SelectedColumn, SelectedTab) chain being briefly null (e.g. a column with zero tabs);
+         WindowChromeRenderTests.StatusLine_ChangesFromTheFallbackToARealCountAfterSubscribing asserts both the
+         fallback text and the real count after Subscribe - a FallbackValue alone would otherwise mask a binding
+         that never updates. It keeps x:Name="StatusLine" (tests look it up by name).
+         The MIT attribution stays as the second cell even though the fork has no such cell: the licence notice
+         outranks visual parity. It wraps rather than trims, so it is never cut at narrow widths;
+         StatusBandRenderTests pins that it shares one row with the status line at the sizes the render suite
+         covers. -->
+    <Grid x:Name="StatusBand" DockPanel.Dock="Bottom" Background="Transparent" Margin="0,8,0,0"
+          ColumnDefinitions="Auto,*">
+      <TextBlock x:Name="StatusLine" Grid.Column="0" Opacity="0.6" FontSize="11" VerticalAlignment="Center"
+                 Margin="0,0,16,0"
+                 Text="{Binding SelectedColumn.SelectedTab.Notes.Count, FallbackValue='0 notes', StringFormat='{}{0} notes'}" />
+      <TextBlock x:Name="Copyright" Grid.Column="1" Opacity="0.5" FontSize="12" VerticalAlignment="Center"
+                 TextAlignment="Right" TextWrapping="Wrap"
+                 Text="Based on Krile StarryEyes by Karno (MIT). New code (C) 2026 Krile NightlyDawn contributors." />
+    </Grid>
 
     <views:KeysPanelView x:Name="KeysPanel" DockPanel.Dock="Bottom" Margin="0,12,0,0" />
 

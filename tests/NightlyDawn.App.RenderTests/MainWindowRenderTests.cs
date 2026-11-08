@@ -113,15 +113,14 @@ public sealed class MainWindowRenderTests
         var root = Assert.IsType<DockPanel>(window.Content);
         var children = root.Children;
 
-        Assert.True(children.Count == 5,
-            $"root DockPanel has {children.Count} children, not the 5 known rows -- a new or removed docked " +
+        Assert.True(children.Count == 4,
+            $"root DockPanel has {children.Count} children, not the 4 known rows -- a new or removed docked " +
             "row changes how much DIP the fill slot (Panel -> Workspace -> TimelineList) gets (§63/§65).");
 
         AssertChild(children[0], typeof(DockPanel), name: null);
-        AssertChild(children[1], typeof(TextBlock), name: null);
-        AssertChild(children[2], typeof(TextBlock), name: "StatusLine");
-        AssertChild(children[3], typeof(KeysPanelView), name: "KeysPanel");
-        AssertChild(children[4], typeof(Panel), name: null);
+        AssertChild(children[1], typeof(Grid), name: "StatusBand");
+        AssertChild(children[2], typeof(KeysPanelView), name: "KeysPanel");
+        AssertChild(children[3], typeof(Panel), name: null);
     }
 
     private static void AssertChild(Control child, Type expectedType, string? name)
